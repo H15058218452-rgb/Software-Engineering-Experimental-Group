@@ -198,6 +198,10 @@ async function handleSubmit() {
     localStorage.setItem(submittedKey, JSON.stringify(submittedPhones))
 
     intentCode.value = Math.random().toString(36).slice(2, 10).toUpperCase()
+    
+    // 临时记录：详情页 mock 时读取
+    localStorage.setItem('mock_intent_name', form.value.name.trim())
+    localStorage.setItem('mock_intent_phone', form.value.phone.trim())
     // ============ mock end ============
 
     submitTime.value = new Date().toISOString()
