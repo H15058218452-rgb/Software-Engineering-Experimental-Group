@@ -2,7 +2,12 @@ export default [
   { path: '/', redirect: '/buyer/goods' },
   {
     path: '/buyer/goods',
-    name: 'buyer-goods',
+    name: 'buyer-goods-list',
+    component: () => import('@/views/buyer/GoodsList.vue')
+  },
+  {
+    path: '/buyer/goods/detail',
+    name: 'buyer-goods-detail',
     component: () => import('@/views/buyer/GoodsDetail.vue')
   },
   {
