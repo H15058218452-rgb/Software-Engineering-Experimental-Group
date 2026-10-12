@@ -55,7 +55,6 @@
     <footer class="footer">
       <div class="footer-inner">
         <router-link to="/buyer/intent/query" class="footer-link">意向管理</router-link>
-        <span class="footer-link disabled">历史订单</span>
       </div>
     </footer>
   </div>

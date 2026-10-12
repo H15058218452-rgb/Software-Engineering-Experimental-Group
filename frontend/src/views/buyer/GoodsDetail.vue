@@ -8,7 +8,6 @@
         </div>
         <nav class="nav">
           <router-link to="/buyer/goods" class="nav-item">首页</router-link>
-          <router-link to="/buyer/intent/query" class="nav-item">意向管理</router-link>
         </nav>
         <router-link to="/seller/login" class="seller-entry">卖家入口</router-link>
       </div>
@@ -56,8 +55,6 @@
             </button>
           </div>
         </div>
-
-        <!-- 下半：整宽按钮（不在这里用，改为主按钮） -->
       </div>
     </main>
 
@@ -98,9 +95,15 @@
     <footer class="footer">
       <div class="footer-inner">
         <router-link to="/buyer/intent/query" class="footer-link">意向管理</router-link>
-        <span class="footer-link disabled">历史订单</span>
       </div>
     </footer>
+
+    <!-- 提交意向弹窗 -->
+    <SubmitIntentModal
+      v-model:visible="showSubmitModal"
+      :product="product"
+      @success="onSubmitSuccess"
+    />
   </div>
 </template>
 
@@ -111,6 +114,7 @@ import { getCurrentProduct } from '@/api/buyer'
 import { PRODUCT_STATUS_TEXT } from '@/constants/productStatus'
 import { formatMoney, formatTime } from '@/utils/format'
 import logoImg from '@/assets/logo.png'
+import SubmitIntentModal from '@/components/SubmitIntentModal.vue'
 
 const router = useRouter()
 const product = ref(null)
@@ -118,6 +122,7 @@ const loading = ref(false)
 const error = ref('')
 const submitting = ref(false)
 const showTopBar = ref(true)
+const showSubmitModal = ref(false)
 
 async function loadProduct() {
   loading.value = true
@@ -127,7 +132,8 @@ async function loadProduct() {
     product.value = {
       id: '1',
       name: '测试商品',
-      description: '这是临时 mock 数据，用来调样式。\n\n这里是商品详情，可以很长，用于验证下方详情区展示。',
+      description:
+        '这是临时 mock 数据，用来调样式。\n\n这里是商品详情，可以很长，用于验证下方详情区展示。',
       imageUrl: '',
       price: '99.99',
       productStatus: 0,
@@ -144,11 +150,16 @@ async function loadProduct() {
 
 function goSubmit() {
   if (!product.value?.canSubmitIntent) return
-  router.push('/buyer/intent/submit')
+  showSubmitModal.value = true
 }
 
 function goHome() {
   router.push('/buyer/goods')
+}
+
+function onSubmitSuccess() {
+  // 提交成功后可以重新拉取商品，同步最新状态
+  // loadProduct()
 }
 
 onMounted(() => {
@@ -168,7 +179,6 @@ onMounted(() => {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: #333;
 }
-
 
 /* 主头部 */
 .header {
@@ -245,7 +255,7 @@ onMounted(() => {
 }
 .state.error { color: #f56c6c; }
 
-/* 详情卡片：白色色块，无边框无圆角无阴影 */
+/* 详情卡片 */
 .detail-card {
   background: #fff;
   border-radius: 0;
@@ -256,7 +266,7 @@ onMounted(() => {
   padding: 40px;
 }
 
-/* 左侧图片：浅灰色块 */
+/* 左侧图片 */
 .product-image {
   flex: 0 0 460px;
   width: 460px;
@@ -382,7 +392,7 @@ onMounted(() => {
   color: #333;
 }
 
-/* 底部深色色块 */
+/* 底部 */
 .footer {
   background: #1a1a1a;
   margin-top: auto;
