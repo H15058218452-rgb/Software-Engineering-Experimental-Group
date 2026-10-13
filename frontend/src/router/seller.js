@@ -15,8 +15,7 @@ const sellerRoutes = [
       { path: 'goods',       name: 'SellerGoodsList',    component: () => import('@/views/seller/GoodsList.vue'),     meta: { title: '历史商品' } },
       { path: 'publish',     name: 'SellerPublish',      component: () => import('@/views/seller/PublishGoods.vue'),  meta: { title: '发布商品' } },
       { path: 'edit/:id',    name: 'SellerEdit',         component: () => import('@/views/seller/PublishGoods.vue'),  meta: { title: '编辑商品' } },
-      { path: 'intents',     name: 'SellerIntents',      component: () => import('@/views/seller/IntentDetail.vue'),  meta: { title: '意向购买人' } },
-      { path: 'intents/:id', name: 'SellerIntentDetail', component: () => import('@/views/seller/IntentDetail.vue'),  meta: { title: '意向详情' } },
+      { path: 'intents',     name: 'SellerIntents',      component: () => import('@/views/seller/IntentList.vue'),  meta: { title: '意向购买人' } },
       { path: 'password',    name: 'SellerPassword',     component: () => import('@/views/seller/ChangePassword.vue'),meta: { title: '修改密码' } }
     ]
   }

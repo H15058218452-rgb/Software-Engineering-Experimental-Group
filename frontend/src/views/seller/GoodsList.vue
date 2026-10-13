@@ -1,85 +1,132 @@
 <template>
   <div>
-    <div class="bar">
-      <h3>商品管理</h3>
-      <router-link class="btn-add" to="/seller/publish">+ 发布商品</router-link>
+    <!-- 当前在售商品（看板） -->
+    <div class="current-box">
+      <div class="bar">
+        <h3>当前商品</h3>
+        <el-tag v-if="currentProduct" :type="getStatusType(currentProduct.status)">
+          {{ getStatusText(currentProduct.status) }}
+        </el-tag>
+        <el-button link type="primary" @click="loadData">刷新状态</el-button>
+      </div>
+      
+      <div v-if="currentProduct" class="product-card">
+        <img :src="currentProduct.image" class="product-img" />
+        <div class="product-info">
+          <h2>{{ currentProduct.name }}</h2>
+          <p class="desc">{{ currentProduct.description }}</p>
+          <p class="price">¥{{ currentProduct.price }}</p>
+          
+          <div class="actions">
+            <!-- 根据商品状态显示不同按钮 -->
+            <template v-if="currentProduct.status === 0">
+              <el-button type="warning" @click="operate('freeze')">手动冻结</el-button>
+              <el-button type="danger" @click="operate('off-shelf')">手动下架</el-button>
+              <!-- 新增：开始交易按钮 -->
+              <el-button type="success" @click="operate('start-trade')">开始交易</el-button>
+              <el-button type="primary" @click="goToIntents">查看意向</el-button>
+            </template>
+            <template v-else-if="currentProduct.status === 1">
+              <el-button type="success" @click="operate('unfreeze')">手动解冻</el-button>
+              <el-button type="danger" @click="operate('off-shelf')">手动下架</el-button>
+              <el-button type="primary" @click="goToIntents">查看意向</el-button>
+            </template>
+            <template v-else-if="currentProduct.status === 2">
+              <el-alert title="商品交易中，禁止解冻和下架" type="info" show-icon :closable="false" style="margin-bottom:10px;" />
+              <el-button type="success" @click="operate('confirm-sold')">确认成交</el-button>
+              <el-button type="danger" @click="operate('confirm-failed')">交易失败</el-button>
+              <el-button type="primary" @click="goToIntents">查看意向</el-button>
+            </template>
+            <template v-else>
+              <el-empty description="当前没有在售商品" :image-size="80" />
+            </template>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="当前没有在售商品" />
     </div>
 
-    <table class="tbl">
-      <thead>
-        <tr><th>图片</th><th>名称</th><th>价格</th><th>库存</th><th>状态</th><th>操作</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="g in list" :key="g.id">
-          <td><img :src="g.image" alt="" /></td>
-          <td>{{ g.name }}</td>
-          <td class="price">¥{{ g.price }}</td>
-          <td>{{ g.stock }}</td>
-          <td>{{ g.status === 1 ? '在售' : '已下架' }}</td>
-          <td class="ops">
-            <a @click="toggle(g)">{{ g.status === 1 ? '下架' : '上架' }}</a>
-            <router-link :to="`/seller/edit/${g.id}`">编辑</router-link>
-            <a class="del" @click="remove(g)">删除</a>
-          </td>
-        </tr>
-        <tr v-if="!list.length"><td colspan="6" class="empty">暂无商品</td></tr>
-      </tbody>
-    </table>
-
-    <div class="pager">
-      <button :disabled="page <= 1" @click="page--; load()">上一页</button>
-      <span>{{ page }} / {{ totalPages }}</span>
-      <button :disabled="page >= totalPages" @click="page++; load()">下一页</button>
+    <!-- 历史商品列表 -->
+    <div class="history-box">
+      <h3>历史商品</h3>
+      <el-table :data="historyList" style="width: 100%; margin-top: 10px;">
+        <el-table-column prop="name" label="商品名称" />
+        <el-table-column prop="price" label="价格" width="120" />
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag type="info">已下架</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="150">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="goToIntentsHistory(row.id)">查看意向</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
-    <p v-if="msg" class="msg">{{ msg }}</p>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getMyGoods, deleteGoods, toggleGoodsStatus } from '@/api/seller'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus' // 移除了 ElMessageBox
+import { getCurrentProduct, getHistoryProducts, operateProduct } from '@/api/seller'
 
-const list = ref([])
-const page = ref(1)
-const size = 8
-const total = ref(0)
-const totalPages = ref(1)
-const msg = ref('')
+const router = useRouter()
+const currentProduct = ref(null)
+const historyList = ref([])
 
-const flash = (t) => { msg.value = t; setTimeout(() => (msg.value = ''), 2000) }
-
-const load = async () => {
-  const res = await getMyGoods({ page: page.value, size })
-  list.value = res.data.list || res.data.records || []
-  total.value = res.data.total || 0
-  totalPages.value = Math.max(1, Math.ceil(total.value / size))
+const statusMap = {
+  0: { text: '在售', type: 'success' },
+  1: { text: '手动冻结', type: 'warning' },
+  2: { text: '交易中冻结', type: 'danger' },
+  3: { text: '已下架', type: 'info' }
 }
 
-const toggle = async (g) => {
-  await toggleGoodsStatus(g.id, g.status === 1 ? 0 : 1)
-  flash('操作成功'); load()
+const getStatusText = (status) => statusMap[status]?.text || '未知'
+const getStatusType = (status) => statusMap[status]?.type || 'info'
+
+const loadData = async () => {
+  try {
+    const res1 = await getCurrentProduct()
+    if (res1.code === 0) currentProduct.value = res1.data
+
+    const res2 = await getHistoryProducts()
+    if (res2.code === 0) historyList.value = res2.data.list
+  } catch (e) {}
 }
 
-const remove = async (g) => {
-  if (!confirm(`确定删除商品「${g.name}」吗?`)) return
-  await deleteGoods(g.id)
-  flash('删除成功'); load()
+const operate = async (action) => {
+  // 需求规定：所有操作均无二次确认弹窗，点击即执行
+  const res = await operateProduct(action, { productId: currentProduct.value.id })
+  if (res.code === 0) {
+    ElMessage.success('操作成功')
+    loadData() // 操作成功后手动刷新页面数据
+  }
 }
 
-onMounted(load)
+const goToIntents = () => {
+  router.push(`/seller/intents?productId=${currentProduct.value.id}`)
+}
+
+const goToIntentsHistory = (id) => {
+  router.push(`/seller/intents?productId=${id}`)
+}
+
+onMounted(() => {
+  loadData()
+})
 </script>
 
 <style scoped>
+.current-box { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
 .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.btn-add { background: #c7000b; color: #fff; padding: 8px 16px; text-decoration: none; font-size: 14px; }
-.tbl { width: 100%; border-collapse: collapse; background: #fff; }
-.tbl th, .tbl td { border: 1px solid #eee; padding: 10px 12px; font-size: 14px; text-align: center; }
-.tbl img { width: 56px; height: 56px; object-fit: cover; }
-.price { color: #c7000b; }
-.ops a { margin: 0 6px; color: #409eff; cursor: pointer; text-decoration: none; }
-.ops .del { color: #c7000b; }
-.empty { color: #999; padding: 30px 0; }
-.pager { margin-top: 16px; text-align: center; }
-.pager button { padding: 6px 14px; margin: 0 10px; cursor: pointer; }
-.msg { color: #67c23a; margin-top: 10px; }
+.history-box { background: #fff; padding: 20px; border-radius: 8px; }
+.product-card { display: flex; gap: 20px; }
+.product-img { width: 200px; height: 200px; object-fit: contain; background: #fafafa; border-radius: 8px; }
+.product-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.product-info h2 { margin: 0 0 10px 0; font-size: 20px; }
+.desc { color: #666; margin-bottom: 15px; }
+.price { color: #c7000b; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
 </style>

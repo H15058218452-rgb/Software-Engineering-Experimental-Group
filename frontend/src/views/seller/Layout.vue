@@ -1,7 +1,7 @@
 <template>
   <div class="seller-layout">
     <header class="top">
-      <div class="logo">二手商城 · 卖家中心</div>
+      <div class="logo">MVP购物系统 · 卖家中心</div>
       <div class="right">
         <span>{{ sellerName }}</span>
         <router-link to="/">回商城</router-link>
@@ -12,7 +12,7 @@
       <aside class="side">
         <router-link to="/seller/goods">商品管理</router-link>
         <router-link to="/seller/publish">发布商品</router-link>
-        <router-link to="/seller/intents">意图管理</router-link>
+        <router-link to="/seller/intents">查看意向购买人</router-link>
         <router-link to="/seller/password">修改密码</router-link>
       </aside>
       <main class="main"><router-view /></main>

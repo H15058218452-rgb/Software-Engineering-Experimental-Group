@@ -2,31 +2,38 @@
   <div>
     <div class="bar">
       <h3>意图管理</h3>
+      <!-- 筛选下拉框：符合需求说明书中的意向状态枚举 -->
       <select v-model="status" @change="page = 1; load()">
         <option value="">全部状态</option>
-        <option value="0">待处理</option>
-        <option value="1">已同意</option>
-        <option value="2">已拒绝</option>
-        <option value="3">已完成</option>
+        <option value="0">排队中</option>
+        <option value="1">交易中</option>
+        <option value="2">交易成功</option>
+        <option value="3">已作废</option>
+        <option value="4">已撤销</option>
+        <option value="5">重新排队中</option>
+        <option value="6">最终失败</option>
       </select>
     </div>
 
     <table class="tbl">
       <thead>
-        <tr><th>意图编号</th><th>商品</th><th>买家</th><th>出价</th><th>数量</th><th>状态</th><th>提交时间</th><th>操作</th></tr>
+        <tr>
+          <th>排队位次</th>
+          <th>姓名</th>
+          <th>电话</th>
+          <th>提交时间</th>
+          <th>交易结果</th>
+        </tr>
       </thead>
       <tbody>
         <tr v-for="it in list" :key="it.id">
-          <td>{{ it.id }}</td>
-          <td>{{ it.goodsName }}</td>
+          <td>{{ it.queuePosition }}</td>
           <td>{{ it.buyerName }}</td>
-          <td class="price">¥{{ it.price }}</td>
-          <td>{{ it.quantity }}</td>
-          <td>{{ statusText(it.status) }}</td>
+          <td>{{ it.buyerPhone }}</td>
           <td>{{ it.createTime }}</td>
-          <td><router-link :to="`/seller/intents/${it.id}`">处理</router-link></td>
+          <td>{{ statusText(it.intentStatus) }}</td>
         </tr>
-        <tr v-if="!list.length"><td colspan="8" class="empty">暂无意图</td></tr>
+        <tr v-if="!list.length"><td colspan="5" class="empty">暂无意图</td></tr>
       </tbody>
     </table>
 
@@ -48,7 +55,19 @@ const page = ref(1)
 const size = 8
 const totalPages = ref(1)
 
-const statusText = (s) => ['待处理', '已同意', '已拒绝', '已完成'][s] || s
+// 状态文字映射表（与需求说明书的枚举值一一对应）
+const statusText = (s) => {
+  const map = {
+    0: '排队中',
+    1: '交易中',
+    2: '交易成功',
+    3: '已作废',
+    4: '已撤销',
+    5: '重新排队中',
+    6: '最终失败'
+  }
+  return map[s] ?? '未知'
+}
 
 const load = async () => {
   const res = await getSellerIntents({ page: page.value, size, status: status.value })
@@ -60,12 +79,10 @@ onMounted(load)
 
 <style scoped>
 .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-select { padding: 6px 10px; }
+select { padding: 6px 10px; border: 1px solid #dcdfe6; border-radius: 4px; }
 .tbl { width: 100%; border-collapse: collapse; background: #fff; }
 .tbl th, .tbl td { border: 1px solid #eee; padding: 10px; font-size: 14px; text-align: center; }
-.price { color: #c7000b; }
-.tbl a { color: #409eff; text-decoration: none; }
 .empty { color: #999; padding: 30px 0; }
 .pager { margin-top: 16px; text-align: center; }
-.pager button { padding: 6px 14px; margin: 0 10px; }
+.pager button { padding: 6px 14px; margin: 0 10px; cursor: pointer; }
 </style>
