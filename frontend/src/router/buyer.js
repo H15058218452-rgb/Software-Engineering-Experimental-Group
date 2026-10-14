@@ -11,11 +11,6 @@ export default [
     component: () => import('@/views/buyer/GoodsDetail.vue')
   },
   {
-    path: '/buyer/intent/submit',
-    name: 'buyer-intent-submit',
-    component: () => import('@/views/buyer/SubmitIntent.vue')
-  },
-  {
     path: '/buyer/intent/query',
     name: 'buyer-intent-query',
     component: () => import('@/views/buyer/IntentQuery.vue')
