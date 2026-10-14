@@ -29,7 +29,7 @@ backend/src/main/java/com/example/shop/
 
 ### 1. 准备 MySQL
 
-确保本机 MySQL 8 已启动，数据库连接信息见 `application.yml`（默认 `root/root`，库名 `shop`）。
+确保本机 MySQL 8 已启动，数据库连接信息见 `application.yml`（默认 `root/123456`，库名 `shop`）。
 
 > 应用启动时会自动执行 `schema.sql`（全部 `CREATE TABLE IF NOT EXISTS`，幂等），无需手动建库建表；`shop` 库由脚本内 `CREATE DATABASE IF NOT EXISTS` 自动创建（需连接账号有建库权限）。
 
