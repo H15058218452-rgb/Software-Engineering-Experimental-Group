@@ -96,18 +96,18 @@ async function handleQuery() {
   error.value = ''
   try {
     // ============ 真实调用（后端好了用这段） ============
-    // const res = await queryIntent(code.value.trim())
-    // localStorage.setItem(STORAGE_KEYS.INTENT_CODE, code.value.trim())
-    // router.push('/buyer/intent/detail')
+     const res = await queryIntent(code.value.trim())
+     localStorage.setItem(STORAGE_KEYS.INTENT_CODE, code.value.trim())
+     router.push('/buyer/intent/detail')
 
     // ============ 临时 mock（后端好了删掉） ============
-    await new Promise((r) => setTimeout(r, 500))
-    if (code.value.trim().length < 8) {
-      error.value = '口令码已失效，无对应意向信息'
-      return
-    }
-    localStorage.setItem(STORAGE_KEYS.INTENT_CODE, code.value.trim())
-    router.push('/buyer/intent/detail')
+    //await new Promise((r) => setTimeout(r, 500))
+    //if (code.value.trim().length < 8) {
+    //  error.value = '口令码已失效，无对应意向信息'
+    //  return
+    //}
+    //localStorage.setItem(STORAGE_KEYS.INTENT_CODE, code.value.trim())
+    //router.push('/buyer/intent/detail')
     // ============ mock end ============
   } catch (e) {
     if (e.code === 40905) {
