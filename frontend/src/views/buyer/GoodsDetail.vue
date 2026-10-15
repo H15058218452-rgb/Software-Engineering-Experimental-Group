@@ -39,7 +39,7 @@
             <div class="product-price">{{ formatMoney(product.price) }}</div>
 
             <div class="product-status">
-              状态：{{ PRODUCT_STATUS_TEXT[product.productStatus] || '未知' }}
+              状态：{{ PRODUCT_STATUS_TEXT[product.status] || '未知' }}
             </div>
 
             <div v-if="!product.canSubmitIntent" class="tips">
@@ -80,11 +80,11 @@
             </tr>
             <tr>
               <td class="label">商品状态</td>
-              <td>{{ PRODUCT_STATUS_TEXT[product.productStatus] || '未知' }}</td>
+              <td>{{ PRODUCT_STATUS_TEXT[product.status] || '未知' }}</td>
             </tr>
             <tr>
               <td class="label">发布时间</td>
-              <td>{{ formatTime(product.createdAt) }}</td>
+              <td>{{ formatTime(product.createTime) }}</td>
             </tr>
           </tbody>
         </table>

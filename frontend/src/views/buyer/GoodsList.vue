@@ -31,16 +31,17 @@
       <div v-else class="goods-card">
         <div class="goods-card-body">
           <div class="goods-image">
-            <img
-              :src="product.imageUrl || '/placeholder.png'"
-              alt="商品图片"
-            />
+          <img
+            :src="product.imageUrl ? '/uploads/' + product.imageUrl : '/placeholder.png'" alt="商品图片"
+          />
+
+
           </div>
           <div class="goods-info">
             <h2 class="goods-name">{{ product.name }}</h2>
             <div class="goods-price">{{ formatMoney(product.price) }}</div>
             <div class="goods-status">
-              状态：{{ PRODUCT_STATUS_TEXT[product.productStatus] || '未知' }}
+              状态：{{ PRODUCT_STATUS_TEXT[product.status] || '未知' }}
             </div>
           </div>
         </div>
