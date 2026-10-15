@@ -175,33 +175,33 @@ async function handleSubmit() {
   submitting.value = true
   try {
     // ============ 真实调用（后端好了用这段） ============
-    // const res = await submitIntent({
-    //   productId: props.product?.id,
-    //   name: form.value.name.trim(),
-    //   phone: form.value.phone.trim()
-    // })
-    // intentCode.value = res.code
+     const res = await submitIntent({
+       productId: props.product?.id,
+       name: form.value.name.trim(),
+       phone: form.value.phone.trim()
+     })
+     intentCode.value = res.code
 
     // ============ 临时 mock（后端好了删掉） ============
-    await new Promise((r) => setTimeout(r, 500))
-    const phone = form.value.phone.trim()
-    const submittedKey = `mock_submitted_${props.product?.id || 'default'}`
-    const submittedPhones = JSON.parse(localStorage.getItem(submittedKey) || '[]')
+    //await new Promise((r) => setTimeout(r, 500))
+    //const phone = form.value.phone.trim()
+    //const submittedKey = `mock_submitted_${props.product?.id || 'default'}`
+    //const submittedPhones = JSON.parse(localStorage.getItem(submittedKey) || '[]')
 
-    if (submittedPhones.includes(phone)) {
-      errors.value.phone = '您已提交过该商品的购买意向，请勿重复提交'
-      submitting.value = false
-      return
-    }
+    //if (submittedPhones.includes(phone)) {
+    //  errors.value.phone = '您已提交过该商品的购买意向，请勿重复提交'
+    //  submitting.value = false
+    //  return
+    //}
 
-    submittedPhones.push(phone)
-    localStorage.setItem(submittedKey, JSON.stringify(submittedPhones))
+    //submittedPhones.push(phone)
+    //localStorage.setItem(submittedKey, JSON.stringify(submittedPhones))
 
-    intentCode.value = Math.random().toString(36).slice(2, 10).toUpperCase()
+    //intentCode.value = Math.random().toString(36).slice(2, 10).toUpperCase()
     
     // 临时记录：详情页 mock 时读取
-    localStorage.setItem('mock_intent_name', form.value.name.trim())
-    localStorage.setItem('mock_intent_phone', form.value.phone.trim())
+    //localStorage.setItem('mock_intent_name', form.value.name.trim())
+    //localStorage.setItem('mock_intent_phone', form.value.phone.trim())
     // ============ mock end ============
 
     submitTime.value = new Date().toISOString()
