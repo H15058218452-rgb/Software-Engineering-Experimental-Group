@@ -32,10 +32,8 @@
         <div class="goods-card-body">
           <div class="goods-image">
           <img
-            :src="product.imageUrl ? '/uploads/' + product.imageUrl : '/placeholder.png'" alt="商品图片"
+            :src="product.imageUrl || '/placeholder.png'"alt="商品图片"
           />
-
-
           </div>
           <div class="goods-info">
             <h2 class="goods-name">{{ product.name }}</h2>
