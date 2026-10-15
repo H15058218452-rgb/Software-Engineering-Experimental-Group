@@ -303,20 +303,20 @@ async function loadIntent() {
   error.value = ''
   try {
     // ============ 真实调用（后端好了用这段） ============
-    // intent.value = await queryIntent(code)
+     intent.value = await queryIntent(code)
 
     // ============ 临时 mock（后端好了删掉） ============
-    await new Promise((r) => setTimeout(r, 300))
-    intent.value = {
-      code,
-      productName: '测试商品',
-      productPrice: '99.99',
-      intentStatus: 0, // 0 排队中 / 1 交易中 / 5 重新排队 / 2/3/4/6 已终结
-      queuePosition: 1,
-      createdAt: new Date().toISOString(),
-      name: localStorage.getItem('mock_intent_name') || '张三',
-      phone: localStorage.getItem('mock_intent_phone') || '13800001111'
-    }
+    //await new Promise((r) => setTimeout(r, 300))
+    //intent.value = {
+    //  code,
+     // productName: '测试商品',
+    //  productPrice: '99.99',
+    //  intentStatus: 0, // 0 排队中 / 1 交易中 / 5 重新排队 / 2/3/4/6 已终结
+    //  queuePosition: 1,
+    //  createdAt: new Date().toISOString(),
+    //  name: localStorage.getItem('mock_intent_name') || '张三',
+    //  phone: localStorage.getItem('mock_intent_phone') || '13800001111'
+   // }
     // ============ mock end ============
   } catch (e) {
     if (e.code === 40905) {

@@ -77,16 +77,16 @@ async function loadProduct() {
   error.value = ''
   try {
     // 临时 mock，等后端好了删掉
-    product.value = {
-      id: '1',
-      name: '测试商品',
-      description: '这是临时 mock 数据，用来调样式。',
-      imageUrl: '',
-      price: '99.99',
-      productStatus: 0,
-      canSubmitIntent: true
-    }
-    // product.value = await getCurrentProduct()
+    //product.value = {
+    //  id: '1',
+    //  name: '测试商品',
+    //  description: '这是临时 mock 数据，用来调样式。',
+    //  imageUrl: '',
+    //  price: '99.99',
+    //  productStatus: 0,
+    //  canSubmitIntent: true
+    //}
+     product.value = await getCurrentProduct()
   } catch (e) {
     error.value = e.message || '加载商品失败，请重试'
   } finally {
