@@ -33,15 +33,21 @@ const onSubmit = async () => {
   if (!form.username || !form.password) { errMsg.value = '账号和密码不能为空'; return }
   loading.value = true
   try {
-    // ⚠️ 改动2：把 sellerLogin 改成了 login
-    const res = await login(form)
-    
-    // 存 Token（Mock 阶段会存一个 mock-token-123）
-    localStorage.setItem('seller_token', res.data.token)
-    localStorage.setItem('seller_info', JSON.stringify(res.data.seller || res.data))
-    
-    // 跳转逻辑
-    router.replace(route.query.redirect || '/seller')
+   const res = await login(form)
+
+// 保存后端签发的真实 Token
+if (!res?.token) {
+  throw new Error('登录成功，但后端没有返回 Token')
+}
+
+localStorage.setItem('seller_token', res.token)
+localStorage.setItem(
+  'seller_info',
+  JSON.stringify({ username: form.username })
+)
+
+// 保留原有跳转逻辑
+router.replace(route.query.redirect || '/seller')
   } catch (e) {
     errMsg.value = e.message || '登录失败'
   } finally {
