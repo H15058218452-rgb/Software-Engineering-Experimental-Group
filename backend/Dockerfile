@@ -1,11 +1,14 @@
-# 使用 JDK 17 基础镜像
-FROM eclipse-temurin:17-jdk-alpine
+# ============ 构建阶段 ============
+FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
-# 复制所有文件
-COPY . .
-# 编译并跳过测试
-RUN chmod +x mvnw && ./mvnw clean package -DskipTests
-# 暴露 8080 端口
+COPY pom.xml .
+RUN mvn -q dependency:go-offline
+COPY src ./src
+RUN mvn -q -DskipTests package
+
+# ============ 运行阶段 ============
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-# 启动项目（注意：请把后面的 jar 包名字换成你们实际打出来的名字，比如 shop-backend-1.0.0.jar）
-CMD ["java", "-jar", "target/online-shop-backend-1.0.0.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
