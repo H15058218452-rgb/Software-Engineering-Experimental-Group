@@ -1,21 +1,42 @@
-version: '3.8'
 services:
-  db:
+  mysql:
     image: mysql:8.0
+    container_name: shop-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: "123456"
       MYSQL_DATABASE: shop
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
       - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p123456"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build: ./backend
+    container_name: shop-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/shop?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: "123456"
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       - "8080:8080"
-    depends_on:
-      - db
+
   frontend:
     build: ./frontend
-    ports:
-      - "5173:5173"
+    container_name: shop-frontend
     depends_on:
       - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  mysql-data:
