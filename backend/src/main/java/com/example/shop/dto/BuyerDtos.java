@@ -23,6 +23,7 @@ public interface BuyerDtos {
     record BuyerIntentView(String intentId, Integer intentStatus, String intentStatusText,
                            Integer queuePosition, Boolean canModify, Boolean canCancel,
                            String name, String phone, String queuedAt,
-                           Integer productStatus, String productStatusText) {
+                           Integer productStatus, String productStatusText,
+                           String productName, String productPrice, String createdAt) {
     }
 }
