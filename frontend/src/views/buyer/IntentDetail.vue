@@ -41,11 +41,11 @@
             <div class="info-list">
               <div class="info-row">
                 <span class="label">商品名称</span>
-                <span class="value">{{ intent.productName }}</span>
+                <span class="value">{{ intent.productName || '加载中...' }}</span>
               </div>
               <div class="info-row">
                 <span class="label">商品价格</span>
-                <span class="value price">{{ formatMoney(intent.productPrice) }}</span>
+                <span class="value price">{{ intent.productPrice ? formatMoney(intent.productPrice) : '--' }}</span>
               </div>
               <div class="info-row">
                 <span class="label">意向状态</span>
@@ -57,7 +57,7 @@
               </div>
               <div class="info-row">
                 <span class="label">提交时间</span>
-                <span class="value">{{ formatTime(intent.createdAt) }}</span>
+                <span class="value">{{ formatTime(intent.queuedAt) }}</span>
               </div>
               <div class="info-row">
                 <span class="label">买家姓名</span>
@@ -90,11 +90,11 @@
             <div class="info-list">
               <div class="info-row">
                 <span class="label">商品名称</span>
-                <span class="value">{{ intent.productName }}</span>
+                <span class="value">{{ intent.productName || '加载中...' }}</span>
               </div>
               <div class="info-row">
                 <span class="label">商品价格</span>
-                <span class="value price">{{ formatMoney(intent.productPrice) }}</span>
+                <span class="value price">{{ intent.productPrice ? formatMoney(intent.productPrice) : '--' }}</span>
               </div>
               <div class="info-row">
                 <span class="label">买家姓名</span>
@@ -122,7 +122,7 @@
             <div class="info-list">
               <div class="info-row">
                 <span class="label">商品名称</span>
-                <span class="value">{{ intent.productName }}</span>
+                <span class="value">{{ intent.productName || '加载中...' }}</span>
               </div>
               <div class="info-row">
                 <span class="label">最终状态</span>
@@ -233,7 +233,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { queryIntent, updateIntent, cancelIntent } from '@/api/buyer'
+import { queryIntent, updateIntent, cancelIntent, getCurrentProduct } from '@/api/buyer'
 import { STORAGE_KEYS } from '@/constants/storageKeys'
 import { INTENT_STATUS, INTENT_STATUS_TEXT } from '@/constants/intentStatus'
 import { formatMoney, formatTime } from '@/utils/format'
@@ -302,22 +302,21 @@ async function loadIntent() {
   loading.value = true
   error.value = ''
   try {
-    // ============ 真实调用（后端好了用这段） ============
-     intent.value = await queryIntent(code)
+    // 1. 查询意向详情
+    const res = await queryIntent(code)
+    
+    // 2. 临时补救：因为后端没返回商品名称和价格，顺手查一下当前商品
+    try {
+      const product = await getCurrentProduct()
+      if (product) {
+        res.productName = product.name
+        res.productPrice = product.price
+      }
+    } catch (err) {
+      // 如果查不到当前商品（比如商品下架了），就忽略，留空
+    }
 
-    // ============ 临时 mock（后端好了删掉） ============
-    //await new Promise((r) => setTimeout(r, 300))
-    //intent.value = {
-    //  code,
-     // productName: '测试商品',
-    //  productPrice: '99.99',
-    //  intentStatus: 0, // 0 排队中 / 1 交易中 / 5 重新排队 / 2/3/4/6 已终结
-    //  queuePosition: 1,
-    //  createdAt: new Date().toISOString(),
-    //  name: localStorage.getItem('mock_intent_name') || '张三',
-    //  phone: localStorage.getItem('mock_intent_phone') || '13800001111'
-   // }
-    // ============ mock end ============
+    intent.value = res
   } catch (e) {
     if (e.code === 40905) {
       error.value = '口令码已失效，无对应意向信息'
@@ -339,7 +338,7 @@ function openEdit() {
   showEdit.value = true
 }
 
-// 保存修改
+// 保存修改（已解开真实接口）
 async function handleSave() {
   if (saving.value) return
 
@@ -355,32 +354,14 @@ async function handleSave() {
 
   if (editErrors.value.name || editErrors.value.phone) return
 
-  const oldPhone = intent.value.phone
-  const newPhone = phone
-
   saving.value = true
   try {
-    // ============ 真实调用（后端好了用这段） ============
-    // await updateIntent({ name, phone })
+    // 真实调用后端接口
+    await updateIntent({ name, phone })
 
-    // ============ 临时 mock ============
-    await new Promise((r) => setTimeout(r, 400))
-
-    // 同步 mock 的已提交手机号列表：移除旧号，加入新号
-    const submittedKey = 'mock_submitted_1'
-    const submittedPhones = JSON.parse(localStorage.getItem(submittedKey) || '[]')
-    const idx = submittedPhones.indexOf(oldPhone)
-    if (idx > -1) submittedPhones.splice(idx, 1)
-    if (!submittedPhones.includes(newPhone)) submittedPhones.push(newPhone)
-    localStorage.setItem(submittedKey, JSON.stringify(submittedPhones))
-
-    // 同步 mock 的姓名、电话（详情页刷新时用）
-    localStorage.setItem('mock_intent_name', name)
-    localStorage.setItem('mock_intent_phone', newPhone)
-    // ============ mock end ============
-
+    // 成功后更新本地数据并提示
     intent.value.name = name
-    intent.value.phone = newPhone
+    intent.value.phone = phone
     showEdit.value = false
     showToast('联系信息修改成功，您的排队顺序不变')
   } catch (e) {
@@ -395,25 +376,15 @@ function openCancel() {
   showCancel.value = true
 }
 
-// 撤销
+// 撤销（已解开真实接口）
 async function handleCancel() {
   if (cancelling.value) return
   cancelling.value = true
   try {
-    // ============ 真实调用（后端好了用这段） ============
-    // await cancelIntent()
+    // 真实调用后端接口撤销
+    await cancelIntent()
 
-    // ============ 临时 mock ============
-    await new Promise((r) => setTimeout(r, 400))
-
-    // 撤销后从 mock 已提交列表里移除当前手机号
-    const submittedKey = 'mock_submitted_1'
-    const submittedPhones = JSON.parse(localStorage.getItem(submittedKey) || '[]')
-    const idx = submittedPhones.indexOf(intent.value.phone)
-    if (idx > -1) submittedPhones.splice(idx, 1)
-    localStorage.setItem(submittedKey, JSON.stringify(submittedPhones))
-    // ============ mock end ============
-
+    // 成功后关闭弹窗并跳转
     showCancel.value = false
     showToast('购买意向已撤销，您已退出排队')
     setTimeout(() => {
@@ -435,6 +406,7 @@ onMounted(loadIntent)
 </script>
 
 <style scoped>
+/* 此处样式与原来保持一致，只加了 .action-row 的 white-space: nowrap; */
 .intent-page {
   min-height: 100vh;
   display: flex;
@@ -608,6 +580,7 @@ onMounted(loadIntent)
   display: flex;
   gap: 12px;
   margin-top: 28px;
+  white-space: nowrap; /* 新增，防止按钮文字换行 */
 }
 .action-row.single { justify-content: center; }
 .btn-secondary,
