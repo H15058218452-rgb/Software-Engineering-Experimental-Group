@@ -117,6 +117,8 @@ public class BuyerService {
     private BuyerDtos.BuyerIntentView toBuyerView(Intent it) {
         Product p = productMapper.selectById(it.getProductId());
         Integer productStatus = p == null ? null : p.getStatus();
+        String productName = p == null ? null : p.getName();
+        String productPrice = p == null || p.getPrice() == null ? null : p.getPrice().toPlainString();
         Integer position;
         if (it.getStatus() == IntentStatus.TRADING.getCode()) {
             position = 1;
@@ -136,7 +138,10 @@ public class BuyerService {
                 it.getPhone(),
                 TimeUtil.format(it.getQueuedAt()),
                 productStatus,
-                ProductStatus.textOf(productStatus));
+                ProductStatus.textOf(productStatus),
+                productName,
+                productPrice,
+                TimeUtil.format(it.getCreatedAt()));
     }
 
     private ProductDtos.IntentView toIntentView(Intent it, int position) {
