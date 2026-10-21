@@ -17,9 +17,7 @@ export function submitIntent(data) {
 // 查询意向：传入买家输入的口令码
 export function queryIntent(code) {
   return request.get('/buyer/intent', {
-    headers: {
-      'X-Intent-Code': code
-    }
+    params: { code }  
   })
 }
 
