@@ -40,7 +40,11 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String location = Paths.get(uploadDir).toAbsolutePath().toUri().toString();
+        // 必须以 "/" 结尾，否则 Spring 会把该路径当文件而非目录，导致 /uploads/** 全部 404
+        String location = Paths.get(uploadDir).toAbsolutePath().normalize().toUri().toString();
+        if (!location.endsWith("/")) {
+            location += "/";
+        }
         registry.addResourceHandler("/uploads/**").addResourceLocations(location);
     }
 }
