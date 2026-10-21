@@ -24,7 +24,9 @@ mybatis-plus:
 app:
   jwt-secret: "online-shop-mvp-secret-0123456789abcdef"
   jwt-expire-hours: 24
-  upload-dir: ./uploads
+  # 图片上传目录。默认用系统临时目录：实测本机安全软件（火绒）会拦截后端进程在桌面/用户目录/Public/D盘建目录导致上传失败，只有临时目录放行。
+  # 如需持久化到其他位置，启动时加参数覆盖：--app.upload-dir=D:/shop-uploads
+  upload-dir: ${java.io.tmpdir}/shop-uploads
   default-seller:
     username: seller
     password: seller123456
