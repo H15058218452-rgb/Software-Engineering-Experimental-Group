@@ -8,9 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.UUID;
 
@@ -23,7 +25,7 @@ public class UploadService {
     private final Path uploadDir;
 
     public UploadService(@Value("${app.upload-dir}") String uploadDir) {
-        this.uploadDir = Paths.get(uploadDir).toAbsolutePath();
+        this.uploadDir = Paths.get(uploadDir).toAbsolutePath().normalize();
     }
 
     public CommonDtos.UploadResponse upload(MultipartFile file) {
@@ -41,10 +43,13 @@ public class UploadService {
         try {
             Files.createDirectories(uploadDir);
             String filename = UUID.randomUUID().toString().replace("-", "") + "." + ext;
-            file.transferTo(uploadDir.resolve(filename).toFile());
+            // 用 Files.copy 代替 transferTo：transferTo 在部分 Tomcat/Windows 环境下移动临时文件会失败
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, uploadDir.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
+            }
             return new CommonDtos.UploadResponse("/uploads/" + filename);
         } catch (IOException e) {
-            throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "图片保存失败");
+            throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "图片保存失败: " + e.getMessage());
         }
     }
 }
