@@ -38,9 +38,19 @@ public class BuyerService {
 
     @Transactional
     public BuyerDtos.SubmitIntentResponse submit(BuyerDtos.SubmitIntentRequest req) {
-        Product p = productMapper.selectActiveForUpdate();
-        if (p == null) {
-            throw new BizException(ErrorCode.NOT_FOUND.getCode(), "暂无在售商品");
+        // 迭代 2：多商品各自独立队列，必须按 productId 锁定对应商品；
+        // 未传 productId 时回退到基线行为（最近一件在售商品），保证旧前端可用。
+        Product p;
+        if (req.productId() != null) {
+            p = productMapper.selectByIdForUpdate(req.productId());
+            if (p == null) {
+                throw new BizException(ErrorCode.NOT_FOUND.getCode(), "商品不存在");
+            }
+        } else {
+            p = productMapper.selectActiveForUpdate();
+            if (p == null) {
+                throw new BizException(ErrorCode.NOT_FOUND.getCode(), "暂无在售商品");
+            }
         }
         if (p.getStatus() != ProductStatus.ON_SALE.getCode()) {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), "商品已冻结/交易中，无法提交意向");

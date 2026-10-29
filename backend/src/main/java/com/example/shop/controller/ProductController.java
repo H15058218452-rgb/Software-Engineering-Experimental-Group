@@ -68,6 +68,34 @@ public class ProductController {
                 () -> ApiResponse.ok(productService.offShelf(req)));
     }
 
+    /** 编辑商品（A.1-1）：名称/描述/图集/价格/类别，库存走库存接口。 */
+    @PostMapping("/update")
+    public ApiResponse<ProductDtos.SellerProductView> update(@Valid @RequestBody ProductDtos.UpdateRequest req) {
+        return idempotencyService.execute(key("update", req.requestId()),
+                () -> ApiResponse.ok(productService.update(req)));
+    }
+
+    /** 重新上架：已下架且库存 > 0 的商品手动回到在售（A.1-3）。 */
+    @PostMapping("/shelf-on")
+    public ApiResponse<ProductDtos.SellerProductView> shelfOn(@Valid @RequestBody ProductDtos.ProductActionRequest req) {
+        return idempotencyService.execute(key("shelf-on", req.requestId()),
+                () -> ApiResponse.ok(productService.shelfOn(req)));
+    }
+
+    /** 补货：库存增加，不改状态（A.1-3）。 */
+    @PostMapping("/restock")
+    public ApiResponse<ProductDtos.SellerProductView> restock(@Valid @RequestBody ProductDtos.RestockRequest req) {
+        return idempotencyService.execute(key("restock", req.requestId()),
+                () -> ApiResponse.ok(productService.restock(req)));
+    }
+
+    /** 手动调整库存：加减后不得为负，减到 0 自动下架（A.1-3）。 */
+    @PostMapping("/stock-adjust")
+    public ApiResponse<ProductDtos.SellerProductView> adjustStock(@Valid @RequestBody ProductDtos.StockAdjustRequest req) {
+        return idempotencyService.execute(key("stock-adjust", req.requestId()),
+                () -> ApiResponse.ok(productService.adjustStock(req)));
+    }
+
     private String key(String op, String requestId) {
         return (requestId == null || requestId.isBlank()) ? null : "product:" + op + ":" + requestId;
     }

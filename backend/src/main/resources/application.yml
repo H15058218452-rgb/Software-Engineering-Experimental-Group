@@ -9,13 +9,15 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      # 启动时自动执行 schema.sql（全部使用 IF NOT EXISTS，可重复执行）
+      # 启动时依次执行：建表脚本 + 需求 A 迁移脚本（均幂等，可重复执行）
       mode: always
-      schema-locations: classpath:schema.sql
+      schema-locations: classpath:schema.sql,classpath:migration-a.sql
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      # 商品图库单张限制 5MB 由业务代码校验；富文本正文内嵌视频不做格式/大小限制，
+      # 因此这里把传输层上限放宽到 100MB，避免大视频直接 413
+      max-file-size: 100MB
+      max-request-size: 120MB
 
 mybatis-plus:
   configuration:

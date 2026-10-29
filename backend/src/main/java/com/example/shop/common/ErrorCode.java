@@ -19,6 +19,13 @@ public enum ErrorCode {
     TRADING_CANNOT_UNFREEZE(40908, "交易中商品不可解冻"),
     TRADING_CANNOT_OFF_SHELF(40909, "交易中商品不可下架"),
     TRADING_CANNOT_CANCEL(40910, "交易中买家不可撤销"),
+    CATEGORY_INVALID(40911, "类别不合法"),
+    CATEGORY_NAME_DUPLICATE(40912, "同级类别名称重复"),
+    CATEGORY_HAS_CHILDREN(40913, "类别下还有子类别，不可删除"),
+    CATEGORY_HAS_PRODUCTS(40914, "类别下还有商品，不可删除"),
+    STOCK_NOT_ENOUGH(40915, "库存不足"),
+    STOCK_BELOW_ZERO(40916, "库存不能为负"),
+    IMAGES_TOO_MANY(40917, "商品图库最多 9 张"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;

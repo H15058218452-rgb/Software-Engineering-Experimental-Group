@@ -1,68 +1,175 @@
 package com.example.shop.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.shop.common.BizException;
 import com.example.shop.common.ErrorCode;
-import com.example.shop.common.TimeUtil;
-import com.example.shop.dto.CommonDtos;
+import com.example.shop.common.HtmlSanitizer;
 import com.example.shop.dto.ProductDtos;
 import com.example.shop.entity.Intent;
 import com.example.shop.entity.Product;
 import com.example.shop.enums.Disposition;
-import com.example.shop.enums.IntentStatus;
 import com.example.shop.enums.ProductStatus;
 import com.example.shop.mapper.IntentMapper;
 import com.example.shop.mapper.ProductMapper;
-import org.springframework.dao.DuplicateKeyException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
- * 商品模块核心服务：发布 / 冻结 / 解冻 / 开始交易 / 交易成功 / 交易失败递补 / 手动下架。
- * 所有写操作均在事务内通过 SELECT ... FOR UPDATE 锁定商品行保证并发一致性。
+ * 商品写操作服务（迭代 2 · 挑战需求 A）。
+ *
+ * 与基线的差异：
+ * 1. 多商品：去掉「同一时刻仅一件在售」限制；
+ * 2. 类目：商品必须挂在二级类别下；
+ * 3. 库存：成交扣减，归零自动下架；手动增减不得为负；补货与上架分开；
+ * 4. 富媒体：描述为富文本 HTML（白名单清洗），图库最多 9 张，首张为主图。
+ *
+ * 并发一致性：所有写操作都在事务内 SELECT ... FOR UPDATE 锁商品行。
  */
 @Service
 public class ProductService {
 
+    private static final int MAX_IMAGES = 9;
+
     private final ProductMapper productMapper;
     private final IntentMapper intentMapper;
+    private final CategoryService categoryService;
+    private final ProductQueryService queryService;
+    private final ObjectMapper objectMapper;
 
-    public ProductService(ProductMapper productMapper, IntentMapper intentMapper) {
+    public ProductService(ProductMapper productMapper, IntentMapper intentMapper,
+                          CategoryService categoryService, ProductQueryService queryService,
+                          ObjectMapper objectMapper) {
         this.productMapper = productMapper;
         this.intentMapper = intentMapper;
+        this.categoryService = categoryService;
+        this.queryService = queryService;
+        this.objectMapper = objectMapper;
     }
 
-    // ============ 写操作 ============
+    // ============ 商品维护 ============
 
+    /** 发布商品：可同时发布多件，不再做单活跃商品校验。 */
     @Transactional
     public ProductDtos.SellerProductView publish(ProductDtos.PublishRequest req) {
-        Long activeCount = productMapper.selectCount(new LambdaQueryWrapper<Product>()
-                .in(Product::getStatus, ProductStatus.ON_SALE.getCode(),
-                        ProductStatus.FROZEN.getCode(), ProductStatus.TRADING.getCode()));
-        if (activeCount > 0) {
-            throw new BizException(ErrorCode.CONCURRENT_CONFLICT.getCode(), "已有未下架商品，请先下架后再发布");
-        }
+        categoryService.requireLeafCategory(req.categoryId());
+        List<String> images = normalizeImages(req.images());
+        int stock = req.stock() == null ? 1 : req.stock();
+
         Product p = new Product();
         p.setName(req.name().trim());
-        p.setDescription(req.description());
-        if (req.imageUrl() != null && !req.imageUrl().isBlank()) {
-            p.setImageUrl(req.imageUrl().trim());
-        }
+        p.setCategoryId(req.categoryId());
+        p.setDescription(HtmlSanitizer.sanitize(req.description()));
+        p.setImagesJson(writeImages(images));
+        p.setImageUrl(images.isEmpty() ? null : images.get(0));
         p.setPrice(req.price());
+        p.setStock(stock);
         p.setStatus(ProductStatus.ON_SALE.getCode());
         p.setCreatedAt(LocalDateTime.now());
-        try {
-            productMapper.insert(p);
-        } catch (DuplicateKeyException e) {
-            throw new BizException(ErrorCode.CONCURRENT_CONFLICT.getCode(), "已有未下架商品，请先下架后再发布");
-        }
-        return getSellerCurrent();
+        p.setUpdatedAt(LocalDateTime.now());
+        productMapper.insert(p);
+        return queryService.toSellerProductView(reload(p.getId()));
     }
+
+    /** 编辑商品。库存不走这里，走补货/库存调整接口，避免绕过扣减规则。 */
+    @Transactional
+    public ProductDtos.SellerProductView update(ProductDtos.UpdateRequest req) {
+        Product p = lock(req.productId());
+        if (p.getStatus() == ProductStatus.TRADING.getCode()) {
+            throw new BizException(ErrorCode.CONCURRENT_CONFLICT.getCode(),
+                    "交易中的商品不可编辑，请先完成或终止当前交易");
+        }
+        categoryService.requireLeafCategory(req.categoryId());
+        List<String> images = normalizeImages(req.images());
+        String description = HtmlSanitizer.sanitize(req.description());
+
+        productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, p.getId())
+                .set(Product::getName, req.name().trim())
+                .set(Product::getCategoryId, req.categoryId())
+                .set(Product::getDescription, description)
+                .set(Product::getImagesJson, writeImages(images))
+                .set(Product::getImageUrl, images.isEmpty() ? null : images.get(0))
+                .set(Product::getPrice, req.price())
+                .set(Product::getUpdatedAt, LocalDateTime.now()));
+        return queryService.toSellerProductView(reload(p.getId()));
+    }
+
+    /** 手动下架。交易中不可下架；下架时队列其余意向置为「最终失败」，不复活。 */
+    @Transactional
+    public ProductDtos.SellerProductView offShelf(ProductDtos.ProductActionRequest req) {
+        Product p = lock(req.productId());
+        if (p.getStatus() == ProductStatus.TRADING.getCode()) {
+            throw new BizException(ErrorCode.TRADING_CANNOT_OFF_SHELF);
+        }
+        if (p.getStatus() == ProductStatus.OFF_SHELF.getCode()) {
+            throw new BizException(ErrorCode.PRODUCT_OFF_SHELF);
+        }
+        intentMapper.closeOthersFinalFailed(p.getId(), -1L);
+        updateProductState(p.getId(), ProductStatus.OFF_SHELF.getCode(), null, LocalDateTime.now());
+        return queryService.toSellerProductView(reload(p.getId()));
+    }
+
+    /** 重新上架：仅对已下架且有库存的商品有效（A.1-3：补货后手动重新上架）。 */
+    @Transactional
+    public ProductDtos.SellerProductView shelfOn(ProductDtos.ProductActionRequest req) {
+        Product p = lock(req.productId());
+        if (p.getStatus() != ProductStatus.OFF_SHELF.getCode()) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "只有已下架的商品才需要重新上架");
+        }
+        if (p.getStock() == null || p.getStock() <= 0) {
+            throw new BizException(ErrorCode.STOCK_NOT_ENOUGH.getCode(), "库存为 0，请先补货再上架");
+        }
+        productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, p.getId())
+                .set(Product::getStatus, ProductStatus.ON_SALE.getCode())
+                .set(Product::getCurrentIntentId, null)
+                .set(Product::getOffShelfAt, null)
+                .set(Product::getUpdatedAt, LocalDateTime.now()));
+        return queryService.toSellerProductView(reload(p.getId()));
+    }
+
+    // ============ 库存 ============
+
+    /** 补货：只增加库存，不改状态；已下架的商品补货后仍需手动上架。 */
+    @Transactional
+    public ProductDtos.SellerProductView restock(ProductDtos.RestockRequest req) {
+        Product p = lock(req.productId());
+        if (productMapper.addStock(p.getId(), req.quantity()) != 1) {
+            throw new BizException(ErrorCode.CONCURRENT_CONFLICT);
+        }
+        return queryService.toSellerProductView(reload(p.getId()));
+    }
+
+    /** 手动调整库存：调整后不得为负；减到 0 自动下架；交易中不可调减。 */
+    @Transactional
+    public ProductDtos.SellerProductView adjustStock(ProductDtos.StockAdjustRequest req) {
+        if (req.delta() == 0) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "调整数量不能为 0");
+        }
+        Product p = lock(req.productId());
+        if (p.getStatus() == ProductStatus.TRADING.getCode() && req.delta() < 0) {
+            throw new BizException(ErrorCode.CONCURRENT_CONFLICT.getCode(), "交易中不可调减库存");
+        }
+        if (productMapper.addStock(p.getId(), req.delta()) != 1) {
+            throw new BizException(ErrorCode.STOCK_BELOW_ZERO);
+        }
+        Product latest = reload(p.getId());
+        if (latest.getStock() != null && latest.getStock() == 0
+                && latest.getStatus() == ProductStatus.ON_SALE.getCode()) {
+            intentMapper.closeOthersFinalFailed(latest.getId(), -1L);
+            updateProductState(latest.getId(), ProductStatus.OFF_SHELF.getCode(), null, LocalDateTime.now());
+            latest = reload(latest.getId());
+        }
+        return queryService.toSellerProductView(latest);
+    }
+
+    // ============ 状态机 / 交易 ============
 
     @Transactional
     public ProductDtos.SellerProductView freeze(ProductDtos.ProductActionRequest req) {
@@ -75,7 +182,7 @@ public class ProductService {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), msg);
         }
         updateProductState(p.getId(), ProductStatus.FROZEN.getCode(), null, null);
-        return getSellerCurrent();
+        return queryService.toSellerProductView(reload(p.getId()));
     }
 
     @Transactional
@@ -91,7 +198,7 @@ public class ProductService {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), "商品不在手动冻结状态");
         }
         updateProductState(p.getId(), ProductStatus.ON_SALE.getCode(), null, null);
-        return getSellerCurrent();
+        return queryService.toSellerProductView(reload(p.getId()));
     }
 
     @Transactional
@@ -103,6 +210,9 @@ public class ProductService {
         if (p.getStatus() != ProductStatus.ON_SALE.getCode()) {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), "商品已冻结/交易中，无法开始交易");
         }
+        if (p.getStock() == null || p.getStock() <= 0) {
+            throw new BizException(ErrorCode.STOCK_NOT_ENOUGH.getCode(), "库存为 0，无法开始交易");
+        }
         Intent head = intentMapper.selectFirstInQueue(p.getId());
         if (head == null) {
             throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "当前没有排队买家，无法开始交易");
@@ -111,9 +221,10 @@ public class ProductService {
             throw new BizException(ErrorCode.CONCURRENT_CONFLICT);
         }
         updateProductState(p.getId(), ProductStatus.TRADING.getCode(), head.getId(), null);
-        return getSellerCurrent();
+        return queryService.toSellerProductView(reload(p.getId()));
     }
 
+    /** 交易成功：扣 1 件库存；仍有库存回到在售，扣到 0 自动下架且队列其余意向失效。 */
     @Transactional
     public ProductDtos.SellerProductView confirmSold(ProductDtos.ConfirmSoldRequest req) {
         Product p = lock(req.productId());
@@ -121,9 +232,17 @@ public class ProductService {
         if (intentMapper.markSuccess(req.intentId()) != 1) {
             throw new BizException(ErrorCode.CONCURRENT_CONFLICT);
         }
-        intentMapper.closeOthersFinalFailed(p.getId(), req.intentId());
-        updateProductState(p.getId(), ProductStatus.OFF_SHELF.getCode(), null, LocalDateTime.now());
-        return getSellerCurrent();
+        if (productMapper.decrementStock(p.getId()) != 1) {
+            throw new BizException(ErrorCode.STOCK_NOT_ENOUGH);
+        }
+        Product latest = reload(p.getId());
+        if (latest.getStock() == null || latest.getStock() <= 0) {
+            intentMapper.closeOthersFinalFailed(p.getId(), req.intentId());
+            updateProductState(p.getId(), ProductStatus.OFF_SHELF.getCode(), null, LocalDateTime.now());
+        } else {
+            updateProductState(p.getId(), ProductStatus.ON_SALE.getCode(), null, null);
+        }
+        return queryService.toSellerProductView(reload(p.getId()));
     }
 
     @Transactional
@@ -152,61 +271,21 @@ public class ProductService {
         } else {
             updateProductState(p.getId(), ProductStatus.ON_SALE.getCode(), null, null);
         }
-        return getSellerCurrent();
-    }
-
-    @Transactional
-    public ProductDtos.SellerProductView offShelf(ProductDtos.ProductActionRequest req) {
-        Product p = lock(req.productId());
-        if (p.getStatus() == ProductStatus.TRADING.getCode()) {
-            throw new BizException(ErrorCode.TRADING_CANNOT_OFF_SHELF);
-        }
-        if (p.getStatus() == ProductStatus.OFF_SHELF.getCode()) {
-            throw new BizException(ErrorCode.PRODUCT_OFF_SHELF);
-        }
-        intentMapper.closeOthersFinalFailed(p.getId(), -1L);
-        updateProductState(p.getId(), ProductStatus.OFF_SHELF.getCode(), null, LocalDateTime.now());
-        return getSellerCurrent();
-    }
-
-    // ============ 查询操作 ============
-
-    public ProductDtos.SellerProductView getSellerCurrent() {
-        Product p = productMapper.selectActive();
-        return p == null ? null : toSellerProductView(p);
-    }
-
-    public ProductDtos.ProductView getBuyerCurrent() {
-        Product p = productMapper.selectActive();
-        return p == null ? null : toProductView(p);
-    }
-
-    public List<ProductDtos.IntentView> listIntents(Long productId) {
-        List<Intent> list = intentMapper.selectList(new LambdaQueryWrapper<Intent>()
-                .eq(Intent::getProductId, productId)
-                .orderByAsc(Intent::getQueuedAt).orderByAsc(Intent::getId));
-        return list.stream().map(it -> toIntentView(it, position(it))).toList();
-    }
-
-    public List<ProductDtos.IntentView> listHistoryIntents(Long productId) {
-        List<Intent> list = intentMapper.selectList(new LambdaQueryWrapper<Intent>()
-                .eq(Intent::getProductId, productId)
-                .orderByAsc(Intent::getQueuedAt).orderByAsc(Intent::getId));
-        return list.stream().map(it -> toIntentView(it, null)).toList();
-    }
-
-    public CommonDtos.PageResult<ProductDtos.ProductView> pageHistory(int page, int pageSize) {
-        Page<Product> result = productMapper.selectPage(new Page<>(page, pageSize),
-                new LambdaQueryWrapper<Product>().eq(Product::getStatus, ProductStatus.OFF_SHELF.getCode())
-                        .orderByDesc(Product::getOffShelfAt).orderByDesc(Product::getId));
-        List<ProductDtos.ProductView> list = result.getRecords().stream().map(this::toProductView).toList();
-        return new CommonDtos.PageResult<>(page, pageSize, result.getTotal(), list);
+        return queryService.toSellerProductView(reload(p.getId()));
     }
 
     // ============ 私有辅助 ============
 
     private Product lock(Long id) {
         Product p = productMapper.selectByIdForUpdate(id);
+        if (p == null) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        return p;
+    }
+
+    private Product reload(Long id) {
+        Product p = productMapper.selectById(id);
         if (p == null) {
             throw new BizException(ErrorCode.NOT_FOUND);
         }
@@ -225,78 +304,52 @@ public class ProductService {
         }
     }
 
-    /**
-     * 显式更新商品状态与 current_intent_id。
-     * 注意：updateById 默认策略不更新 null 字段，必须用 UpdateWrapper 才能把 current_intent_id 置空。
-     */
+    /** 显式更新状态：updateById 不更新 null，必须用 UpdateWrapper 才能置空 current_intent_id。 */
     private void updateProductState(Long id, int status, Long currentIntentId, LocalDateTime offShelfAt) {
         LambdaUpdateWrapper<Product> uw = new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, id)
                 .set(Product::getStatus, status)
-                .set(Product::getCurrentIntentId, currentIntentId);
+                .set(Product::getCurrentIntentId, currentIntentId)
+                .set(Product::getUpdatedAt, LocalDateTime.now());
         if (offShelfAt != null) {
             uw.set(Product::getOffShelfAt, offShelfAt);
         }
         productMapper.update(null, uw);
     }
 
-    private Integer position(Intent it) {
-        int s = it.getStatus();
-        if (s == IntentStatus.TRADING.getCode()) {
-            return 1;
+    /** 图库校验：≤9 张、地址合法、去重，首张为主图。 */
+    private List<String> normalizeImages(List<String> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
         }
-        if (s == IntentStatus.QUEUING.getCode() || s == IntentStatus.REQUEUED.getCode()) {
-            return intentMapper.calcQueuePosition(it.getProductId(), it.getQueuedAt(), it.getId());
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        for (String raw : images) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String url = raw.trim();
+            if (url.length() > 500) {
+                throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "图片地址过长");
+            }
+            if (!(url.startsWith("/uploads/") || url.startsWith("http://") || url.startsWith("https://"))) {
+                throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "图片地址不合法：" + url);
+            }
+            set.add(url);
         }
-        return null;
+        if (set.size() > MAX_IMAGES) {
+            throw new BizException(ErrorCode.IMAGES_TOO_MANY);
+        }
+        return new ArrayList<>(set);
     }
 
-    private ProductDtos.IntentView toIntentView(Intent it, Integer pos) {
-        boolean active = it.getStatus() == IntentStatus.QUEUING.getCode()
-                || it.getStatus() == IntentStatus.REQUEUED.getCode();
-        return new ProductDtos.IntentView(
-                String.valueOf(it.getId()),
-                it.getName(),
-                it.getPhone(),
-                it.getStatus(),
-                IntentStatus.textOf(it.getStatus()),
-                pos,
-                TimeUtil.format(it.getQueuedAt()),
-                TimeUtil.format(it.getCreatedAt()),
-                active,
-                active);
-    }
-
-    private ProductDtos.ProductView toProductView(Product p) {
-        return new ProductDtos.ProductView(
-                String.valueOf(p.getId()), p.getName(), p.getDescription(), p.getImageUrl(),
-                p.getPrice().toPlainString(), p.getStatus(), ProductStatus.textOf(p.getStatus()),
-                TimeUtil.format(p.getCreatedAt()), TimeUtil.format(p.getOffShelfAt()),
-                p.getStatus() == ProductStatus.ON_SALE.getCode());
-    }
-
-    private ProductDtos.SellerProductView toSellerProductView(Product p) {
-        int s = p.getStatus();
-        int activeCount = Math.toIntExact(intentMapper.selectCount(new LambdaQueryWrapper<Intent>()
-                .eq(Intent::getProductId, p.getId())
-                .in(Intent::getStatus, IntentStatus.QUEUING.getCode(),
-                        IntentStatus.TRADING.getCode(), IntentStatus.REQUEUED.getCode())));
-        Intent current = p.getCurrentIntentId() != null ? intentMapper.selectById(p.getCurrentIntentId()) : null;
-        ProductDtos.IntentView currentView = current != null ? toIntentView(current, 1) : null;
-        boolean onSale = s == ProductStatus.ON_SALE.getCode();
-        boolean frozen = s == ProductStatus.FROZEN.getCode();
-        boolean trading = s == ProductStatus.TRADING.getCode();
-        return new ProductDtos.SellerProductView(
-                String.valueOf(p.getId()), p.getName(), p.getDescription(), p.getImageUrl(),
-                p.getPrice().toPlainString(), s, ProductStatus.textOf(s),
-                TimeUtil.format(p.getCreatedAt()), TimeUtil.format(p.getOffShelfAt()),
-                p.getCurrentIntentId() == null ? null : String.valueOf(p.getCurrentIntentId()),
-                onSale,
-                frozen,
-                onSale && activeCount > 0,
-                onSale || frozen,
-                trading,
-                currentView,
-                activeCount);
+    private String writeImages(List<String> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(images);
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "图库序列化失败");
+        }
     }
 }

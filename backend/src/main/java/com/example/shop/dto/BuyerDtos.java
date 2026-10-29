@@ -5,9 +5,14 @@ import jakarta.validation.constraints.Size;
 
 public interface BuyerDtos {
 
+    /**
+     * 提交购买意向。
+     * 迭代 2 起必须带 productId（多商品各自独立队列）；传空时兼容基线，取最近一件在售商品。
+     */
     record SubmitIntentRequest(
             @NotBlank(message = "姓名不能为空") @Size(max = 50) String name,
             @NotBlank(message = "联系电话不能为空") @Size(max = 20) String phone,
+            Long productId,
             String requestId) {
     }
 

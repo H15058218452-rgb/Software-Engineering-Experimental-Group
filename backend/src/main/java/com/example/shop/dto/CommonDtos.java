@@ -25,4 +25,8 @@ public interface CommonDtos {
 
     record UploadResponse(String url) {
     }
+
+    /** 商品图库批量上传返回（顺序与上传顺序一致，前端直接把 urls 提交给发布接口）。 */
+    record UploadListResponse(List<String> urls) {
+    }
 }
