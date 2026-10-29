@@ -49,7 +49,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getSellerIntents, getCurrentProduct } from '@/api/seller' // 引入获取当前商品的接口
+import { getSellerIntents } from '@/api/seller'
+import { ElMessage } from 'element-plus' // 引入提示
 
 const route = useRoute()
 const list = ref([])
@@ -58,7 +59,6 @@ const page = ref(1)
 const size = 8
 const totalPages = ref(1)
 
-// 1. 状态文字映射
 const statusText = (s) => {
   const map = {
     0: '排队中', 1: '交易中', 2: '交易成功',
@@ -67,30 +67,18 @@ const statusText = (s) => {
   return map[s] ?? '未知'
 }
 
-// 2. 格式化时间函数：把 2026-10-21T15:07:03+08:00 变成 2026-10-21 15:07:03
 const formatTime = (timeStr) => {
   if (!timeStr) return '-'
-  // 截取前 19 个字符，替换中间的 'T' 为空格
   return timeStr.substring(0, 19).replace('T', ' ')
 }
 
 const load = async () => {
-  let productId = route.query.productId
+  // 多商品下，必须从 URL 中获取商品 ID
+  const productId = route.query.productId
 
-  // 3. 如果是点击左侧菜单进来的，URL里没有 ID，就自动去查当前在售商品
   if (!productId) {
-    try {
-      const currentRes = await getCurrentProduct()
-      if (currentRes.code === 0 && currentRes.data) {
-        productId = currentRes.data.id // 拿到当前商品 ID
-      } else {
-        console.warn('当前没有在售商品，无法查看意向')
-        return
-      }
-    } catch (error) {
-      console.error('获取当前商品失败', error)
-      return
-    }
+    ElMessage.warning('未指定商品，请从商品列表点击“查看意向”进入')
+    return
   }
 
   try {
@@ -101,6 +89,7 @@ const load = async () => {
     }
   } catch (error) {
     console.error('获取意向列表失败：', error)
+    ElMessage.error('获取数据失败')
   }
 }
 
