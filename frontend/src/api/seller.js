@@ -1,37 +1,23 @@
 import request from '@/utils/request'
 
-// 兼容现有页面：request.js 已经把成功响应解包，
-// 这里重新包装为旧页面使用的 { code, message, data } 格式。
-const success = (data, message = 'success') => ({
-  code: 0,
-  message,
-  data
-})
+const success = (data, message = 'success') => ({ code: 0, message, data })
 
-// 后端写接口需要 requestId 放在请求体中。
-// request.js 里的 X-Request-Id 请求头仍然保留。
 const genRequestId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-// 将后端商品字段适配为现有页面使用的字段。
-// 保留原字段，不改变后端返回的数据结构。
 const normalizeProduct = (product) => {
   if (!product) return null
-
   return {
     ...product,
     id: product.id == null ? product.id : String(product.id),
-    image: product.imageUrl ?? product.image ?? '',
+    image: product.imageUrl ?? (product.images && product.images.length > 0 ? product.images[0] : '') ?? product.image ?? '',
     price: product.price == null ? '' : String(product.price)
   }
 }
 
 // 1. 卖家登录
-// 直接返回后端数据，避免改变现有登录页面的行为。
 export function login(data) {
   return request.post('/seller/login', data)
 }
@@ -42,188 +28,130 @@ export async function changePassword(data) {
   return success(result)
 }
 
-// 3. 获取当前商品
-export async function getCurrentProduct() {
-  const result = await request.get('/seller/product/current')
-  return success(normalizeProduct(result))
+// 3. 获取所有商品列表
+export async function getProductList(params) {
+  const result = await request.get('/seller/products', { params })
+  return success({
+    list: (result?.list || result?.records || []).map(normalizeProduct),
+    total: result?.total || 0
+  })
 }
 
 // 4. 发布商品
 export async function publishProduct(data) {
+  const imageArr = data.images || (data.image ? [data.image] : []);
+
   const payload = {
     name: data.name?.trim(),
     description: data.description?.trim() || null,
-    price: String(data.price),
-    imageUrl: data.imageUrl ?? data.image ?? null,
+    price: Number(data.price),
+    stock: Number(data.stock),
+    categoryId: data.categoryId, 
+    images: imageArr, 
     requestId: genRequestId()
   }
-
   const result = await request.post('/product/publish', payload)
   return success(normalizeProduct(result), '发布成功')
 }
 
-export const publishGoods = publishProduct
-
-// 5. 编辑商品
-// 当前后端接口契约规定商品发布后不可修改，不能再模拟保存成功。
-export function updateGoods() {
-  return Promise.reject({
-    code: 40001,
-    message: '商品发布后不可修改，请勿使用编辑功能'
-  })
+// 5. 修改库存 (对接后端的 stock-adjust，计算 delta)
+export async function updateStock(productId, newStock, oldStock) {
+  const delta = Number(newStock) - Number(oldStock)
+  
+  const payload = { 
+    productId: Number(productId),
+    delta: delta,
+    requestId: genRequestId() 
+  }
+  const result = await request.post('/product/stock-adjust', payload)
+  return success(normalizeProduct(result), '库存修改成功')
 }
 
-// 6. 获取商品详情
-// 当前契约未提供单独的商品详情接口。
-export function getGoodsDetail() {
-  return Promise.reject({
-    code: 40001,
-    message: '当前后端未提供商品详情接口'
-  })
-}
-
-// 7. 商品操作
+// 6. 商品操作（冻结、解冻、开始交易、确认成交/失败、下架、上架）
 const actionEndpoints = {
   freeze: '/product/freeze',
   unfreeze: '/product/unfreeze',
   'start-trade': '/product/start-trade',
   'confirm-sold': '/product/confirm-sold',
   'confirm-failed': '/product/confirm-failed',
-  'off-shelf': '/product/off-shelf'
+  'off-shelf': '/product/off-shelf',
+  'shelf-on': '/product/shelf-on' // 👈 补充：重新上架接口
 }
 
 export async function operateProduct(action, data = {}) {
   const endpoint = actionEndpoints[action]
-
-  if (!endpoint) {
-    throw {
-      code: 40001,
-      message: `不支持的商品操作：${action}`
-    }
-  }
+  if (!endpoint) throw { code: 40001, message: `不支持的商品操作：${action}` }
 
   const payload = {
-    productId: String(data.productId),
+    productId: Number(data.productId),
     requestId: genRequestId()
   }
 
-  // 成交接口必须提供当前交易意向 ID。
-  if (action === 'confirm-sold') {
-    if (data.intentId == null) {
-      throw {
-        code: 40001,
-        message: '确认成交需要提供当前交易意向 ID'
-      }
+  if (action === 'confirm-sold' || action === 'confirm-failed') {
+    if (data.intentId == null) throw { code: 40001, message: '需要提供意向 ID' }
+    payload.intentId = Number(data.intentId)
+    if (action === 'confirm-failed') {
+      if (!['VOID', 'REQUEUE'].includes(data.disposition)) throw { code: 40001, message: '请指定处置方式' }
+      payload.disposition = data.disposition
     }
-    payload.intentId = String(data.intentId)
-  }
-
-  // 交易失败必须指定作废或重新排队。
-  if (action === 'confirm-failed') {
-    if (!['VOID', 'REQUEUE'].includes(data.disposition)) {
-      throw {
-        code: 40001,
-        message: '请指定交易失败后的处理方式'
-      }
-    }
-
-    if (data.intentId == null) {
-      throw {
-        code: 40001,
-        message: '确认交易失败需要提供当前交易意向 ID'
-      }
-    }
-
-    payload.intentId = String(data.intentId)
-    payload.disposition = data.disposition
   }
 
   const result = await request.post(endpoint, payload)
   return success(normalizeProduct(result), '操作成功')
 }
 
-// 8. 历史商品
-export async function getHistoryProducts(page = 1, pageSize = 10) {
-  const result = await request.get('/seller/history/products', {
-    params: { page, pageSize }
-  })
-
-  const list = Array.isArray(result)
-    ? result
-    : (result?.list ?? result?.records ?? [])
-
-  return success({
-    ...(Array.isArray(result) ? {} : result),
-    list: list.map(normalizeProduct),
-    total: Array.isArray(result)
-      ? list.length
-      : (result?.total ?? list.length)
-  })
-}
-
-// 9. 历史商品的意向记录
-export async function getHistoryProductIntents(id) {
-  const result = await request.get(
-    `/seller/history/products/${encodeURIComponent(String(id))}/intents`
-  )
-  return success(result)
-}
-
-// 10. 获取意向列表
+// 7. 获取意向列表
 export async function getIntentList(productId) {
-  const result = await request.get('/seller/intents', {
-    params: { productId: String(productId) }
-  })
-
-  const list = Array.isArray(result)
-    ? result
-    : (result?.list ?? result?.records ?? [])
-
-  return success({
-    ...(Array.isArray(result) ? {} : result),
-    list,
-    total: Array.isArray(result)
-      ? list.length
-      : (result?.total ?? list.length)
-  })
+  const result = await request.get('/seller/intents', { params: { productId: String(productId) } })
+  const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
+  return success({ ...(Array.isArray(result) ? {} : result), list, total: list.length })
 }
-
 export const getSellerIntents = getIntentList
 
-// 11. 上传商品图片
+// 8. 上传图片
 export async function uploadImage(file) {
   const formData = new FormData()
   formData.append('file', file)
-
   const result = await request.post('/upload/image', formData)
-
-  // 兼容后端返回 { url: '/uploads/xxx' } 或直接返回 URL 字符串。
-  const url = typeof result === 'string'
-    ? result
-    : result?.url
-
-  if (!url) {
-    throw {
-      code: 50000,
-      message: '图片上传成功响应中没有图片地址'
-    }
-  }
-
+  const url = typeof result === 'string' ? result : result?.url
+  if (!url) throw { code: 50000, message: '上传失败' }
   return success({ url }, '上传成功')
 }
 
-// 以下是旧页面可能引用的兼容导出。
-// 当前后端契约没有提供删除商品或切换状态接口，不能伪造成功。
-export function deleteGoods() {
-  return Promise.reject({
-    code: 40001,
-    message: '当前后端未提供删除商品接口，请使用下架功能'
+// 9. 获取分类树
+export async function getCategoryTree() {
+  const result = await request.get('/category/tree')
+  return success(result)
+}
+
+// 10. 获取客户列表（Mock）
+export async function getCustomerList(params) {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve(success({
+        list: [
+          { id: '101', username: '张三', phone: '13800001111', address: '图书馆', registerTime: '2026-10-01T10:00:00' },
+          { id: '102', username: '李四', phone: '13900002222', address: '食堂', registerTime: '2026-10-02T11:00:00' }
+        ],
+        total: 2
+      }))
+    }, 300)
   })
 }
 
-export function toggleGoodsStatus() {
-  return Promise.reject({
-    code: 40001,
-    message: '请使用冻结、解冻或下架接口'
+// 11. 获取客户历史订单（Mock）
+export async function getCustomerHistory(customerId) {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve(success([
+        { id: '1', productName: '盲盒', orderTime: '2026-10-20T12:00:00', result: '交易成功', resultTime: '2026-10-20T14:00:00' },
+        { id: '2', productName: '键盘', orderTime: '2026-10-21T09:00:00', result: '排队中', resultTime: null }
+      ]))
+    }, 300)
   })
 }
+
+// 兼容旧代码空壳
+export function updateGoods() { return Promise.reject({ code: 40001, message: '暂不支持编辑' }) }
+export function getGoodsDetail() { return Promise.reject({ code: 40001, message: '暂无详情接口' }) }
+export const publishGoods = publishProduct;

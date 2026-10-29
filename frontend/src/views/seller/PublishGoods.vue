@@ -2,21 +2,12 @@
   <div class="wrap">
     <div class="header-bar">
       <h3>{{ isEdit ? '编辑商品' : '发布商品' }}</h3>
-      <!-- 提示信息 -->
-      <el-alert 
-        v-if="hasProduct && !isEdit" 
-        title="当前已有在售商品，请先下架后再发布新商品" 
-        type="warning" 
-        show-icon 
-        :closable="false" 
-        style="margin-bottom: 16px;" 
-      />
     </div>
 
     <form class="form" @submit.prevent="onSubmit">
       <div class="row">
         <label>商品名称</label>
-        <input v-model.trim="form.name" placeholder="请输入商品名称" :disabled="hasProduct && !isEdit" />
+        <input v-model.trim="form.name" placeholder="请输入商品名称" />
       </div>
 
       <div class="row">
@@ -27,24 +18,52 @@
           min="0" 
           step="0.01" 
           placeholder="请输入价格，如 99.99" 
-          :disabled="hasProduct && !isEdit"
         />
       </div>
 
       <div class="row">
+        <label>库存数量</label>
+        <input 
+          v-model.number="form.stock" 
+          type="number" 
+          min="1" 
+          placeholder="请输入库存数量，至少为 1" 
+        />
+      </div>
+
+      <!-- ⚠️ 修改：动态渲染后端返回的两级分类 -->
+      <div class="row">
+        <label>所属类别</label>
+        <select v-model="form.categoryId">
+          <option value="" disabled>请选择二级商品类别</option>
+          <!-- 遍历一级分类 -->
+          <template v-for="cat1 in categoryList" :key="cat1.id">
+            <!-- 遍历二级分类 -->
+            <option 
+              v-for="cat2 in (cat1.children || [])" 
+              :key="cat2.id" 
+              :value="cat2.id"
+            >
+              {{ cat1.name }} / {{ cat2.name }}
+            </option>
+          </template>
+        </select>
+      </div>
+
+      <div class="row">
         <label>商品图片</label>
-        <input type="file" accept="image/*" @change="onFile" :disabled="hasProduct && !isEdit" />
+        <input type="file" accept="image/*" @change="onFile" />
         <img v-if="form.image" :src="form.image" class="preview" />
         <div class="tip">支持 JPG/PNG/WebP，单张不超过 5MB</div>
       </div>
 
       <div class="row">
         <label>商品描述</label>
-        <textarea v-model="form.description" rows="5" placeholder="请输入商品描述（10-2000字）" :disabled="hasProduct && !isEdit"></textarea>
+        <textarea v-model="form.description" rows="5" placeholder="请输入商品描述（10-2000字）"></textarea>
       </div>
 
       <div class="row">
-        <button type="submit" :disabled="loading || (hasProduct && !isEdit)">
+        <button type="submit" :disabled="loading">
           {{ loading ? '提交中...' : (isEdit ? '保存修改' : '立即发布') }}
         </button>
       </div>
@@ -56,8 +75,7 @@
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-// 引入需要的接口，注意这里用的是 publishProduct（和 api/seller.js 对齐）
-import { publishProduct, updateGoods, getGoodsDetail, uploadImage, getCurrentProduct } from '@/api/seller'
+import { publishProduct, updateGoods, getGoodsDetail, uploadImage, getCategoryTree } from '@/api/seller'
 
 const route = useRoute()
 const router = useRouter()
@@ -65,10 +83,11 @@ const isEdit = computed(() => !!route.params.id)
 const loading = ref(false)
 const msg = ref('')
 const isErr = ref(false)
-const hasProduct = ref(false) // 当前是否已有在售商品
 
-// 只保留基线要求的字段
-const form = reactive({ name: '', price: '', image: '', description: '' })
+// 存储真实的分类数据
+const categoryList = ref([])
+
+const form = reactive({ name: '', price: '', stock: 1, categoryId: '', image: '', description: '' })
 
 const flash = (t, err = false) => { msg.value = t; isErr.value = err; setTimeout(() => (msg.value = ''), 2500) }
 
@@ -76,7 +95,6 @@ const onFile = async (e) => {
   const file = e.target.files[0]
   if (!file) return
 
-  // 1. 图片格式和大小校验
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
   if (!allowedTypes.includes(file.type)) {
     flash('图片格式必须是 JPG/PNG/WebP', true)
@@ -87,31 +105,36 @@ const onFile = async (e) => {
     return
   }
 
-  // 2. 上传
   try {
     const res = await uploadImage(file)
     form.image = res.data.url || res.data
   } catch {
-    // 后端未提供上传接口时，本地预览兜底
     form.image = URL.createObjectURL(file)
   }
 }
 
 const onSubmit = async () => {
-  // 1. 必填校验
   if (!form.name || !form.price) { 
     flash('请完整填写名称和价格', true)
     return 
   }
 
-  // 2. 价格格式校验（>0，最多两位小数）
   const priceStr = String(form.price)
   if (!/^\d+(\.\d{1,2})?$/.test(priceStr) || Number(priceStr) <= 0) {
     flash('价格必须大于0，且最多两位小数', true)
     return
   }
 
-  // 3. 图片必填校验
+  if (!form.stock || form.stock < 1) {
+    flash('库存必须大于等于1', true)
+    return
+  }
+
+  if (!form.categoryId) {
+    flash('请选择商品类别', true)
+    return
+  }
+
   if (!form.image) {
     flash('请上传商品图片', true)
     return
@@ -122,6 +145,7 @@ const onSubmit = async () => {
     if (isEdit.value) {
       await updateGoods(route.params.id, form)
     } else {
+      // 注意：后端的 PublishRequest 里可能字段叫 categoryId
       await publishProduct(form)
     }
     flash(isEdit.value ? '保存成功' : '发布成功')
@@ -134,13 +158,18 @@ const onSubmit = async () => {
 }
 
 onMounted(async () => {
-  // 1. 检查当前是否有在售商品
-  const resCurrent = await getCurrentProduct()
-  if (resCurrent.code === 0 && resCurrent.data) {
-    hasProduct.value = true
+  // 1. 页面加载时，先拉取真实的两级分类列表
+  try {
+    const catRes = await getCategoryTree()
+    if (catRes.code === 0) {
+      categoryList.value = catRes.data || []
+    }
+  } catch (e) {
+    console.error('获取分类失败，请检查数据库是否有数据', e)
+    flash('获取分类列表失败，请先在后台添加分类', true)
   }
 
-  // 2. 如果是编辑模式，加载商品详情
+  // 2. 编辑模式回显
   if (!isEdit.value) return
   const res = await getGoodsDetail(route.params.id)
   if (res.code === 0) {
@@ -154,9 +183,8 @@ onMounted(async () => {
 .header-bar { margin-bottom: 16px; }
 .row { margin-bottom: 16px; }
 label { display: block; margin-bottom: 6px; color: #666; font-size: 14px; }
-input, textarea { width: 100%; padding: 8px 10px; border: 1px solid #dcdfe6; box-sizing: border-box; font-size: 14px; border-radius: 4px; }
-input:focus, textarea:focus { outline: none; border-color: #c7000b; }
-input:disabled, textarea:disabled { background-color: #f5f7fa; cursor: not-allowed; }
+input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #dcdfe6; box-sizing: border-box; font-size: 14px; border-radius: 4px; }
+input:focus, textarea:focus, select:focus { outline: none; border-color: #c7000b; }
 .preview { width: 120px; height: 120px; object-fit: cover; margin-top: 8px; display: block; border: 1px solid #eee; border-radius: 4px; }
 .tip { font-size: 12px; color: #999; margin-top: 5px; }
 button { background: #c7000b; color: #fff; border: none; padding: 10px 28px; font-size: 15px; cursor: pointer; border-radius: 4px; width: 100%; }
