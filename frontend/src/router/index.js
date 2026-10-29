@@ -13,6 +13,11 @@ router.beforeEach((to, from, next) => {
     const token = localStorage.getItem(STORAGE_KEYS.SELLER_TOKEN)
     if (!token) return next('/seller/login')
   }
+
+  if (to.meta.requiresBuyerAuth) {
+    const token = localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN)
+    if (!token) return next('/buyer/login')
+  }
   next()
 })
 
