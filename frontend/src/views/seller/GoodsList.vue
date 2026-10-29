@@ -11,7 +11,7 @@
       </div>
       
       <div v-if="currentProduct" class="product-card">
-        < img :src="currentProduct.image" class="product-img" />
+        <img :src="currentProduct.image" class="product-img" />
         <div class="product-info">
           <h2>{{ currentProduct.name }}</h2>
           <p class="desc">{{ currentProduct.description }}</p >

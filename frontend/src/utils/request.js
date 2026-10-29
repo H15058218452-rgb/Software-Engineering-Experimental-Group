@@ -17,19 +17,14 @@ const request = axios.create({
 request.interceptors.request.use(config => {
   config.headers['X-Request-Id'] = genRequestId()
 
-  const token = localStorage.getItem(STORAGE_KEYS.SELLER_TOKEN)
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`
-  }
+  // 自动携带鉴权 Token（同时兼容买家和卖家）
+  const sellerToken = localStorage.getItem(STORAGE_KEYS.SELLER_TOKEN)
+  const buyerToken = localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN)
 
-  // 口令码：优先使用请求头里已设置的口令码，否则从 localStorage 取
-  if (config.headers['X-Skip-Intent-Code'] === 'true') {
-    delete config.headers['X-Skip-Intent-Code']
-  } else if (!config.headers['X-Intent-Code']) {
-    const intentCode = localStorage.getItem(STORAGE_KEYS.INTENT_CODE)
-    if (intentCode) {
-      config.headers['X-Intent-Code'] = intentCode
-    }
+  if (window.location.pathname.startsWith('/seller') && sellerToken) {
+    config.headers['Authorization'] = `Bearer ${sellerToken}`
+  } else if (buyerToken) {
+    config.headers['Authorization'] = `Bearer ${buyerToken}`
   }
 
   return config
@@ -40,9 +35,15 @@ request.interceptors.response.use(
     const { code, message, data } = res.data
     if (code === 0) return data
 
-    if (code === 40101 && window.location.pathname.startsWith('/seller')) {
-      localStorage.removeItem(STORAGE_KEYS.SELLER_TOKEN)
-      window.location.href = '/seller/login'
+    // 401 处理
+    if (code === 40101) {
+      if (window.location.pathname.startsWith('/seller')) {
+        localStorage.removeItem(STORAGE_KEYS.SELLER_TOKEN)
+        window.location.href = '/seller/login'
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.BUYER_TOKEN)
+        window.location.href = '/buyer/login'
+      }
     }
 
     return Promise.reject({
@@ -52,10 +53,7 @@ request.interceptors.response.use(
   },
   err => {
     const code = err?.response?.data?.code ?? 50000
-    const msg =
-      err?.response?.data?.message ||
-      ERROR_MESSAGE[code] ||
-      '网络请求失败，请检查网络后重试'
+    const msg = err?.response?.data?.message || ERROR_MESSAGE[code] || '网络请求失败，请检查网络后重试'
     return Promise.reject({ code, message: msg })
   }
 )
