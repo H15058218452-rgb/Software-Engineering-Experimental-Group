@@ -7,6 +7,7 @@ public enum ErrorCode {
     OK(0, "success"),
     PARAM_ERROR(40001, "参数错误"),
     UNAUTHORIZED(40101, "未登录"),
+    LOGIN_FAILED(40102, "手机号或密码错误"),
     FORBIDDEN(40301, "无权限"),
     NOT_FOUND(40401, "资源不存在"),
     CONCURRENT_CONFLICT(40901, "并发冲突，请重试"),
@@ -26,6 +27,7 @@ public enum ErrorCode {
     STOCK_NOT_ENOUGH(40915, "库存不足"),
     STOCK_BELOW_ZERO(40916, "库存不能为负"),
     IMAGES_TOO_MANY(40917, "商品图库最多 9 张"),
+    PHONE_ALREADY_REGISTERED(40918, "手机号已注册"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;
