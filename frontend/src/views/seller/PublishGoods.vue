@@ -20,16 +20,17 @@
         <input v-model.number="form.stock" type="number" min="1" placeholder="请输入库存数量，至少为 1" />
       </div>
 
+      <!-- ⚠️ 替换为级联选择器 -->
       <div class="row">
         <label>所属类别</label>
-        <select v-model="form.categoryId">
-          <option value="" disabled>请选择二级商品类别</option>
-          <template v-for="cat1 in categoryList" :key="cat1.id">
-            <option v-for="cat2 in (cat1.children || [])" :key="cat2.id" :value="cat2.id">
-              {{ cat1.name }} / {{ cat2.name }}
-            </option>
-          </template>
-        </select>
+        <el-cascader
+          v-model="form.categoryId"
+          :options="categoryList"
+          :props="cascaderProps"
+          placeholder="请选择二级商品类别"
+          style="width: 100%"
+          clearable
+        />
       </div>
 
       <!-- 多图上传区域 -->
@@ -47,7 +48,7 @@
         </div>
       </div>
 
-      <!-- ⚠️ 替换为富文本编辑器 -->
+      <!-- 富文本编辑器 -->
       <div class="row">
         <label>商品描述（富媒体）</label>
         <div style="border: 1px solid #dcdfe6; border-radius: 4px; z-index: 100;">
@@ -88,23 +89,30 @@ const msg = ref('')
 const isErr = ref(false)
 const categoryList = ref([])
 
+// ⚠️ 级联选择器配置
+const cascaderProps = {
+  value: 'id',
+  label: 'name',
+  children: 'children',
+  emitPath: false // 关键：只返回选中的二级 ID，不返回层级数组
+}
+
 const form = reactive({ name: '', price: '', stock: 1, categoryId: '', images: [], description: '' })
 
-// ⚠️ 初始化富文本编辑器
+// 初始化富文本编辑器
 const editorRef = shallowRef()
 const toolbarConfig = {
-  excludeKeys: ['group-video'] // 暂不开启视频，如果老师要求可以去掉这行
+  excludeKeys: ['group-video']
 }
 const editorConfig = { 
   placeholder: '请输入商品描述，可加粗排版、图文混排...',
-  // 自定义图片上传，当用户点富文本里的图片按钮时，走你已有的 uploadImage 接口
   MENU_CONF: {
     uploadImage: {
       async customUpload(file, insertFn) {
         try {
           const res = await uploadImage(file)
           const url = res.data.url || res.data
-          insertFn(url, '图片', url) // 将图片插入到富文本中
+          insertFn(url, '图片', url) 
         } catch (error) {
           alert('富文本图片上传失败')
         }
@@ -117,7 +125,6 @@ const handleCreated = (editor) => {
   editorRef.value = editor
 }
 
-// 组件销毁前，销毁编辑器实例
 onBeforeUnmount(() => {
   if (editorRef.value) {
     editorRef.value.destroy()
@@ -127,7 +134,6 @@ onBeforeUnmount(() => {
 const flash = (t, err = false) => { msg.value = t; isErr.value = err; setTimeout(() => (msg.value = ''), 2500) }
 
 const onFile = async (e) => {
-  // ...（保持你原来的多图上传逻辑不变）...
   const files = e.target.files
   if (!files || files.length === 0) return
   if (form.images.length + files.length > 9) {
@@ -158,7 +164,6 @@ const onSubmit = async () => {
   if (!form.categoryId) { flash('请选择商品类别', true); return }
   if (form.images.length === 0) { flash('请至少上传一张商品图片', true); return }
   
-  // 校验富文本是否为空 (WangEditor 空状态是一个 <p><br></p>)
   if (!form.description || form.description === '<p><br></p>') {
     flash('请填写商品描述', true); return
   }
@@ -195,13 +200,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ... 保持你原来的样式不变 ... */
 .wrap { background: #fff; padding: 24px; max-width: 640px; border-radius: 8px; }
 .header-bar { margin-bottom: 16px; }
 .row { margin-bottom: 16px; }
 label { display: block; margin-bottom: 6px; color: #666; font-size: 14px; }
-input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #dcdfe6; box-sizing: border-box; font-size: 14px; border-radius: 4px; }
-input:focus, textarea:focus, select:focus { outline: none; border-color: #c7000b; }
+input { width: 100%; padding: 8px 10px; border: 1px solid #dcdfe6; box-sizing: border-box; font-size: 14px; border-radius: 4px; }
+input:focus { outline: none; border-color: #c7000b; }
 .tip { font-size: 12px; color: #999; margin-top: 5px; }
 .preview-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .preview-item { position: relative; width: 100px; height: 100px; border: 1px solid #eee; border-radius: 4px; overflow: hidden; }
