@@ -3,12 +3,12 @@ import request from '@/utils/request'
 // ================= 账号相关 =================
 // 买家登录
 export function login(data) {
-  return request.post('/buyer/auth/login', data)
+  return request.post('/buyer/login', data) // 去掉了 /auth
 }
 
 // 买家注册
 export function register(data) {
-  return request.post('/buyer/auth/register', data)
+  return request.post('/buyer/register', data) // 去掉了 /auth
 }
 
 // ================= 商品相关 =================
