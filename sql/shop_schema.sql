@@ -42,17 +42,19 @@ CREATE TABLE IF NOT EXISTS seller (
 -- -----------------------------------------------------
 -- 2. 买家账号表 buyer
 --    设计要点：
---    - 手机号即登录账号，唯一索引兼做防重复注册
---    - 密码仅存 BCrypt 哈希；nickname 可空
+--    - 用户名 + 密码登录，用户名唯一索引兼做防重复注册
+--    - 手机号选填，用于卖家查看购买历史；密码仅存 BCrypt 哈希；nickname 可空
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS buyer (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
-    phone         VARCHAR(20)  NOT NULL COMMENT '手机号，同时作为登录账号',
+    username      VARCHAR(20)  NOT NULL COMMENT '登录用户名，唯一',
+    phone         VARCHAR(20)  NULL COMMENT '手机号，选填，用于关联意向单',
     password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密密码',
     nickname      VARCHAR(50)  NULL COMMENT '昵称，可为空',
     created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
+    UNIQUE KEY uk_buyer_username (username),
     UNIQUE KEY uk_buyer_phone (phone)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家账号表';
 
