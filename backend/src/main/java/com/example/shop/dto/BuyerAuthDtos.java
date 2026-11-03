@@ -12,8 +12,8 @@ public interface BuyerAuthDtos {
                     message = "用户名需 4-20 位，以字母开头，只能包含字母、数字和下划线")
             String username,
             @NotBlank(message = "密码不能为空")
-            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{6,20}$",
-                    message = "密码需 6-20 位，且同时包含字母和数字，不能有空格")
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,20}$",
+                    message = "密码需 8-20 位，且同时包含字母和数字，不能有空格")
             String password,
             @Size(max = 20, message = "昵称最多 20 个字符")
             String nickname,
