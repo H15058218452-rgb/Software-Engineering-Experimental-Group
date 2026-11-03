@@ -30,8 +30,9 @@ export function getCategories() {
 
 // ================= 意向与订单相关 =================
 // 提交购买意向（只传商品ID，身份由Token自动识别）
-export function submitIntent(productId) {
-  return request.post('/buyer/intent', { productId })
+// ⚠️ 修改点：直接传 data，接收完整的对象
+export function submitIntent(data) {
+  return request.post('/buyer/intent', data)
 }
 
 // 获取“我的历史订单”记录
