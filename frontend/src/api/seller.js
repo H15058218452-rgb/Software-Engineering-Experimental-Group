@@ -124,31 +124,16 @@ export async function getCategoryTree() {
   return success(result)
 }
 
-// 10. 获取客户列表（Mock）
+// 10. 获取客户列表
 export async function getCustomerList(params) {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve(success({
-        list: [
-          { id: '101', username: '张三', phone: '13800001111', address: '图书馆', registerTime: '2026-10-01T10:00:00' },
-          { id: '102', username: '李四', phone: '13900002222', address: '食堂', registerTime: '2026-10-02T11:00:00' }
-        ],
-        total: 2
-      }))
-    }, 300)
-  })
+  const result = await request.get('/seller/customers', { params })
+  return success(result)
 }
 
-// 11. 获取客户历史订单（Mock）
+// 11. 获取客户历史订单（后端路径是 /intents）
 export async function getCustomerHistory(customerId) {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve(success([
-        { id: '1', productName: '盲盒', orderTime: '2026-10-20T12:00:00', result: '交易成功', resultTime: '2026-10-20T14:00:00' },
-        { id: '2', productName: '键盘', orderTime: '2026-10-21T09:00:00', result: '排队中', resultTime: null }
-      ]))
-    }, 300)
-  })
+  const result = await request.get(`/seller/customers/${customerId}/intents`)
+  return success(result)
 }
 
 // 兼容旧代码空壳

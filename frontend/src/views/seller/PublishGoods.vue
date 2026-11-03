@@ -102,7 +102,6 @@ const form = reactive({ name: '', price: '', stock: 1, categoryId: '', images: [
 // 初始化富文本编辑器
 const editorRef = shallowRef()
 const toolbarConfig = {
-  excludeKeys: ['group-video']
 }
 const editorConfig = { 
   placeholder: '请输入商品描述，可加粗排版、图文混排...',
