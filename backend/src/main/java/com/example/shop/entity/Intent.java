@@ -11,6 +11,8 @@ public class Intent {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long productId;
+    /** 下单买家ID；NULL 表示注册前（口令码时代）的意向单，我的订单按手机号回退匹配 */
+    private Long buyerId;
     private String codeHash;
     private String name;
     private String phone;
@@ -24,6 +26,8 @@ public class Intent {
     public void setId(Long id) { this.id = id; }
     public Long getProductId() { return productId; }
     public void setProductId(Long productId) { this.productId = productId; }
+    public Long getBuyerId() { return buyerId; }
+    public void setBuyerId(Long buyerId) { this.buyerId = buyerId; }
     public String getCodeHash() { return codeHash; }
     public void setCodeHash(String codeHash) { this.codeHash = codeHash; }
     public String getName() { return name; }
