@@ -130,9 +130,10 @@ CREATE TABLE IF NOT EXISTS product (
 CREATE TABLE IF NOT EXISTS intent (
     id         BIGINT      NOT NULL AUTO_INCREMENT,
     product_id BIGINT      NOT NULL COMMENT '所属商品ID',
+    buyer_id   BIGINT      NULL COMMENT '下单买家ID，NULL=注册前口令码意向',
     code_hash  CHAR(64)    NOT NULL COMMENT '口令码 SHA-256 哈希（不存明文）',
     name       VARCHAR(50) NOT NULL COMMENT '买家姓名',
-    phone      VARCHAR(20) NOT NULL COMMENT '买家联系电话',
+    phone      VARCHAR(20) NULL COMMENT '买家联系电话，选填；无手机号时为 NULL',
     status     TINYINT     NOT NULL DEFAULT 0 COMMENT '0排队中 1交易中 2交易成功 3已作废 4已撤销 5重新排队中 6最终失败',
     queued_at  DATETIME(3) NOT NULL COMMENT '排队时间，重新排队时更新为当前时间（排到队尾）',
     fail_count INT         NOT NULL DEFAULT 0 COMMENT '交易失败次数',
@@ -141,7 +142,8 @@ CREATE TABLE IF NOT EXISTS intent (
     PRIMARY KEY (id),
     UNIQUE KEY uk_intent_code (code_hash),
     KEY idx_intent_queue (product_id, status, queued_at),
-    KEY idx_intent_product_phone (product_id, phone)
+    KEY idx_intent_product_phone (product_id, phone),
+    KEY idx_intent_buyer (buyer_id, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家意向表（排队队列）';
 
 -- -----------------------------------------------------
