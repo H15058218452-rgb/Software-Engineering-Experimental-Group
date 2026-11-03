@@ -40,7 +40,7 @@ public class SellerCustomerService {
         this.productMapper = productMapper;
     }
 
-    /** 客户列表：注册时间倒序，可按手机号/昵称关键词筛选。 */
+    /** 客户列表：注册时间倒序，可按用户名/手机号/昵称关键词筛选。 */
     public CommonDtos.PageResult<SellerCustomerDtos.CustomerView> pageCustomers(String keyword, int page, int pageSize) {
         LambdaQueryWrapper<Buyer> q = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
@@ -49,7 +49,9 @@ public class SellerCustomerService {
                 kw = kw.substring(0, 50);
             }
             String finalKw = kw;
-            q.and(w -> w.like(Buyer::getPhone, finalKw).or().like(Buyer::getNickname, finalKw));
+            q.and(w -> w.like(Buyer::getUsername, finalKw)
+                    .or().like(Buyer::getPhone, finalKw)
+                    .or().like(Buyer::getNickname, finalKw));
         }
         q.orderByDesc(Buyer::getCreatedAt).orderByDesc(Buyer::getId);
         int size = pageSize <= 0 ? 10 : Math.min(pageSize, MAX_PAGE_SIZE);
@@ -64,6 +66,10 @@ public class SellerCustomerService {
         Buyer buyer = buyerMapper.selectById(buyerId);
         if (buyer == null) {
             throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        if (buyer.getPhone() == null) {
+            // 手机号为选填，未填则无法与意向单关联
+            return List.of();
         }
         List<Intent> intents = intentMapper.selectList(new LambdaQueryWrapper<Intent>()
                 .eq(Intent::getPhone, buyer.getPhone())
@@ -89,13 +95,17 @@ public class SellerCustomerService {
     }
 
     private SellerCustomerDtos.CustomerView toCustomerView(Buyer b) {
-        int intentCount = Math.toIntExact(intentMapper.selectCount(
-                new LambdaQueryWrapper<Intent>().eq(Intent::getPhone, b.getPhone())));
-        int successCount = Math.toIntExact(intentMapper.selectCount(
-                new LambdaQueryWrapper<Intent>().eq(Intent::getPhone, b.getPhone())
-                        .eq(Intent::getStatus, IntentStatus.SUCCESS.getCode())));
+        int intentCount = 0;
+        int successCount = 0;
+        if (b.getPhone() != null) {
+            intentCount = Math.toIntExact(intentMapper.selectCount(
+                    new LambdaQueryWrapper<Intent>().eq(Intent::getPhone, b.getPhone())));
+            successCount = Math.toIntExact(intentMapper.selectCount(
+                    new LambdaQueryWrapper<Intent>().eq(Intent::getPhone, b.getPhone())
+                            .eq(Intent::getStatus, IntentStatus.SUCCESS.getCode())));
+        }
         return new SellerCustomerDtos.CustomerView(
-                String.valueOf(b.getId()), b.getPhone(), b.getNickname(),
+                String.valueOf(b.getId()), b.getUsername(), b.getPhone(), b.getNickname(),
                 TimeUtil.format(b.getCreatedAt()), intentCount, successCount);
     }
 }
