@@ -3,12 +3,12 @@ import request from '@/utils/request'
 // ================= 账号相关 =================
 // 买家登录
 export function login(data) {
-  return request.post('/buyer/auth/login', data)
+  return request.post('/buyer/login', data) 
 }
 
 // 买家注册
 export function register(data) {
-  return request.post('/buyer/auth/register', data)
+  return request.post('/buyer/register', data) 
 }
 
 // ================= 商品相关 =================
@@ -23,9 +23,10 @@ export function getProductDetail(id) {
   return request.get(`/buyer/products/${id}`)
 }
 
+// ⚠️ 修改了这里：对齐后端的真实接口 /api/category/tree
 // 获取商品分类（用于买家的两级级联筛选）
 export function getCategories() {
-  return request.get('/buyer/categories')
+  return request.get('/category/tree') 
 }
 
 // ================= 意向与订单相关 =================
