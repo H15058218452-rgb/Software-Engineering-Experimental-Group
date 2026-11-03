@@ -21,15 +21,17 @@ CREATE TABLE IF NOT EXISTS seller (
     UNIQUE KEY uk_seller_username (username)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '卖家表';
 
--- 买家账号表：手机号作为登录账号，密码仅存 BCrypt 哈希
+-- 买家账号表：用户名 + 密码登录，密码仅存 BCrypt 哈希；手机号选填
 CREATE TABLE IF NOT EXISTS buyer (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
-    phone         VARCHAR(20)  NOT NULL COMMENT '手机号，同时作为登录账号',
+    username      VARCHAR(20)  NOT NULL COMMENT '登录用户名，唯一',
+    phone         VARCHAR(20)  NULL COMMENT '手机号，选填，用于关联意向单',
     password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密密码',
     nickname      VARCHAR(50)  NULL COMMENT '昵称，可为空',
     created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
+    UNIQUE KEY uk_buyer_username (username),
     UNIQUE KEY uk_buyer_phone (phone)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家账号表';
 
