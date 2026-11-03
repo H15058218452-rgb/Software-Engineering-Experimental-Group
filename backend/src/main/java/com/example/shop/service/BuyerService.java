@@ -1,15 +1,19 @@
 package com.example.shop.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.shop.common.BizException;
 import com.example.shop.common.ErrorCode;
 import com.example.shop.common.TimeUtil;
 import com.example.shop.dto.BuyerDtos;
+import com.example.shop.dto.CommonDtos;
 import com.example.shop.dto.ProductDtos;
+import com.example.shop.entity.Buyer;
 import com.example.shop.entity.Intent;
 import com.example.shop.entity.Product;
 import com.example.shop.enums.IntentStatus;
 import com.example.shop.enums.ProductStatus;
+import com.example.shop.mapper.BuyerMapper;
 import com.example.shop.mapper.IntentMapper;
 import com.example.shop.mapper.ProductMapper;
 import org.springframework.stereotype.Service;
@@ -21,6 +25,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class BuyerService {
@@ -30,14 +39,40 @@ public class BuyerService {
 
     private final ProductMapper productMapper;
     private final IntentMapper intentMapper;
+    private final BuyerMapper buyerMapper;
 
-    public BuyerService(ProductMapper productMapper, IntentMapper intentMapper) {
+    public BuyerService(ProductMapper productMapper, IntentMapper intentMapper, BuyerMapper buyerMapper) {
         this.productMapper = productMapper;
         this.intentMapper = intentMapper;
+        this.buyerMapper = buyerMapper;
     }
 
     @Transactional
-    public BuyerDtos.SubmitIntentResponse submit(BuyerDtos.SubmitIntentRequest req) {
+    public BuyerDtos.SubmitIntentResponse submit(BuyerDtos.SubmitIntentRequest req, Long buyerId) {
+        // 登录态提交：身份以 Token 为准，姓名/电话未填时取买家账号资料（需求 A.2-1 废除口令码身份）
+        Buyer buyer = null;
+        if (buyerId != null) {
+            buyer = buyerMapper.selectById(buyerId);
+            if (buyer == null) {
+                throw new BizException(ErrorCode.UNAUTHORIZED);
+            }
+        }
+        String name = trimToNull(req.name());
+        String phone = trimToNull(req.phone());
+        if (buyer != null) {
+            if (name == null) {
+                String nickname = trimToNull(buyer.getNickname());
+                name = nickname != null ? nickname : buyer.getUsername();
+            }
+            if (phone == null) {
+                phone = buyer.getPhone();
+            }
+        }
+        // 无 Token 的旧调用仍要求姓名和电话
+        if (buyer == null && (name == null || phone == null)) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "姓名和联系电话不能为空");
+        }
+
         // 迭代 2：多商品各自独立队列，必须按 productId 锁定对应商品；
         // 未传 productId 时回退到基线行为（最近一件在售商品），保证旧前端可用。
         Product p;
@@ -55,15 +90,20 @@ public class BuyerService {
         if (p.getStatus() != ProductStatus.ON_SALE.getCode()) {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), "商品已冻结/交易中，无法提交意向");
         }
-        if (intentMapper.countActiveByPhone(p.getId(), req.phone().trim()) > 0) {
+        // 同一买家（或同一手机号）同一商品仅一条有效意向
+        if (buyerId != null && intentMapper.countActiveByBuyer(p.getId(), buyerId) > 0) {
+            throw new BizException(ErrorCode.DUPLICATE_INTENT);
+        }
+        if (phone != null && intentMapper.countActiveByPhone(p.getId(), phone) > 0) {
             throw new BizException(ErrorCode.DUPLICATE_INTENT);
         }
         String code = generateCode();
         Intent it = new Intent();
         it.setProductId(p.getId());
+        it.setBuyerId(buyerId);
         it.setCodeHash(sha256(code));
-        it.setName(req.name().trim());
-        it.setPhone(req.phone().trim());
+        it.setName(name);
+        it.setPhone(phone);
         it.setStatus(IntentStatus.QUEUING.getCode());
         it.setQueuedAt(LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS));
         it.setFailCount(0);
@@ -72,6 +112,72 @@ public class BuyerService {
         intentMapper.insert(it);
         int position = intentMapper.calcQueuePosition(p.getId(), it.getQueuedAt(), it.getId());
         return new BuyerDtos.SubmitIntentResponse(code, toIntentView(it, position));
+    }
+
+    /**
+     * 我的订单（需求 A.2-2）：按买家账号查询历史下单记录，提交时间倒序、支持翻页。
+     * 老数据（buyer_id 为 NULL 的口令码意向）按买家注册手机号回退匹配。
+     */
+    public CommonDtos.PageResult<BuyerDtos.OrderItem> orders(Long buyerId, int page, int pageSize) {
+        Buyer buyer = buyerMapper.selectById(buyerId);
+        if (buyer == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(pageSize, 1), 100);
+
+        LambdaQueryWrapper<Intent> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Intent::getBuyerId, buyerId);
+        String phone = trimToNull(buyer.getPhone());
+        if (phone != null) {
+            wrapper.or(w -> w.isNull(Intent::getBuyerId).eq(Intent::getPhone, phone));
+        }
+        wrapper.orderByDesc(Intent::getCreatedAt).orderByDesc(Intent::getId);
+
+        Page<Intent> result = intentMapper.selectPage(new Page<>(safePage, safeSize), wrapper);
+        List<Intent> records = result.getRecords();
+        Map<Long, String> productNames = loadProductNames(records);
+        List<BuyerDtos.OrderItem> items = records.stream()
+                .map(it -> new BuyerDtos.OrderItem(
+                        String.valueOf(it.getId()),
+                        productNames.get(it.getProductId()),
+                        TimeUtil.format(it.getCreatedAt()),
+                        it.getStatus(),
+                        IntentStatus.textOf(it.getStatus()),
+                        dealTimeOf(it)))
+                .toList();
+        return new CommonDtos.PageResult<>(safePage, safeSize, result.getTotal(), items);
+    }
+
+    private Map<Long, String> loadProductNames(List<Intent> records) {
+        List<Long> productIds = records.stream()
+                .map(Intent::getProductId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (productIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return productMapper.selectBatchIds(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Product::getName, (a, b) -> a));
+    }
+
+    /** 只有已出结果（成功/作废/最终失败）才展示交易时间 */
+    private String dealTimeOf(Intent it) {
+        int status = it.getStatus();
+        if (status == IntentStatus.SUCCESS.getCode()
+                || status == IntentStatus.VOIDED.getCode()
+                || status == IntentStatus.FINAL_FAILED.getCode()) {
+            return TimeUtil.format(it.getUpdatedAt());
+        }
+        return null;
+    }
+
+    private String trimToNull(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.trim();
     }
 
     public BuyerDtos.BuyerIntentView query(String code) {
