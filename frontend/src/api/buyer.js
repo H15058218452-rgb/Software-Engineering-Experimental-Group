@@ -23,7 +23,6 @@ export function getProductDetail(id) {
   return request.get(`/buyer/products/${id}`)
 }
 
-// ⚠️ 修改了这里：对齐后端的真实接口 /api/category/tree
 // 获取商品分类（用于买家的两级级联筛选）
 export function getCategories() {
   return request.get('/category/tree') 
