@@ -23,7 +23,6 @@ export function getProductDetail(id) {
   return request.get(`/buyer/products/${id}`)
 }
 
-// ⚠️ 修改了这里：对齐后端的真实接口 /api/category/tree
 // 获取商品分类（用于买家的两级级联筛选）
 export function getCategories() {
   return request.get('/category/tree') 
@@ -31,8 +30,9 @@ export function getCategories() {
 
 // ================= 意向与订单相关 =================
 // 提交购买意向（只传商品ID，身份由Token自动识别）
-export function submitIntent(productId) {
-  return request.post('/buyer/intent', { productId })
+// ⚠️ 修改点：直接传 data，接收完整的对象
+export function submitIntent(data) {
+  return request.post('/buyer/intent', data)
 }
 
 // 获取“我的历史订单”记录

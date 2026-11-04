@@ -44,13 +44,15 @@
             <el-carousel v-if="product.images && product.images.length > 0" height="460px" :autoplay="false">
               <el-carousel-item v-for="(img, index) in product.images" :key="index">
                 <div class="carousel-img-wrap">
-                  <img :src="img || '/placeholder.png'" alt="商品图片" />
+                  <!-- 修改点1：使用 getImageUrl 处理图片路径 -->
+                  <img :src="getImageUrl(img)" alt="商品图片" />
                 </div>
               </el-carousel-item>
             </el-carousel>
             <!-- 没有图时显示占位图 -->
             <div v-else class="carousel-img-wrap">
-              <img src="/placeholder.png" alt="暂无图片" />
+              <!-- 修改点2：使用在线占位图，防止报错 -->
+              <img :src="getImageUrl('')" alt="暂无图片" />
             </div>
           </div>
 
@@ -162,6 +164,16 @@ function getStatusText(status) {
   return map[status] || '未知'
 }
 
+// 修改点3：处理图片路径拼接，防止红屏和裂图
+function getImageUrl(url) {
+  // 如果没有图片，返回在线占位图
+  if (!url) return 'https://via.placeholder.com/460x460?text=No+Image'
+  // 如果是完整的网络地址，直接返回
+  if (url.startsWith('http')) return url
+  // 否则拼接后端地址 (假设后端在 8080 端口)
+  return `http://localhost:8080/${url.startsWith('/') ? url.slice(1) : url}`
+}
+
 async function loadDetail() {
   if (!productId) return router.push('/buyer/goods')
   loading.value = true
@@ -202,7 +214,9 @@ async function submitBuyIntent() {
   if (submitting.value) return
   submitting.value = true
   try {
-    await submitIntent({ productId: productId })
+    // 必须传对象，这样 Axios 才会自动使用 application/json 格式发送
+    await submitIntent({ productId: productId }) 
+    
     showBuyModal.value = false
     ElMessage.success('购买意向提交成功！请在我的订单查看进度')
   } catch (e) {
