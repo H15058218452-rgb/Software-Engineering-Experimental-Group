@@ -11,7 +11,7 @@ spring:
     init:
       # 启动时依次执行：建表脚本 + 迭代 2/3 迁移脚本（均幂等，可重复执行）
       mode: always
-      schema-locations: classpath:schema.sql,classpath:migration-a.sql,classpath:migration-b.sql,classpath:migration-c.sql
+      schema-locations: classpath:schema.sql,classpath:migration-a.sql,classpath:migration-b.sql,classpath:migration-c.sql,classpath:migration-d.sql
   servlet:
     multipart:
       # 商品图库单张限制 5MB 由业务代码校验；富文本正文内嵌视频不做格式/大小限制，
