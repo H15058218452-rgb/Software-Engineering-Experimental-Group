@@ -37,10 +37,6 @@ public class BuyerAccountService {
             throw new BizException(ErrorCode.USERNAME_ALREADY_REGISTERED);
         }
         String phone = req.phone() == null || req.phone().isBlank() ? null : req.phone().trim();
-        if (phone != null && buyerMapper.selectCount(
-                new LambdaQueryWrapper<Buyer>().eq(Buyer::getPhone, phone)) > 0) {
-            throw new BizException(ErrorCode.PHONE_ALREADY_REGISTERED);
-        }
         Buyer buyer = new Buyer();
         buyer.setUsername(username);
         buyer.setPhone(phone);
