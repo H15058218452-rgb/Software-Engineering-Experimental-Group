@@ -46,6 +46,7 @@ public class BuyerAccountService {
         buyer.setPhone(phone);
         buyer.setPasswordHash(encoder.encode(req.password()));
         buyer.setNickname(req.nickname() == null || req.nickname().isBlank() ? null : req.nickname().trim());
+        buyer.setAddress(req.address() == null || req.address().isBlank() ? null : req.address().trim());
         try {
             buyerMapper.insert(buyer);
         } catch (DuplicateKeyException e) {
