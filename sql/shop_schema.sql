@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS buyer (
     updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_buyer_username (username),
-    UNIQUE KEY uk_buyer_phone (phone)
+    KEY idx_buyer_phone (phone)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家账号表';
 
 -- -----------------------------------------------------
