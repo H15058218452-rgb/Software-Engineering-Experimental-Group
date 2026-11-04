@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS buyer (
     phone         VARCHAR(20)  NULL COMMENT '手机号，选填，用于关联意向单',
     password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密密码',
     nickname      VARCHAR(50)  NULL COMMENT '昵称，可为空',
+    address       VARCHAR(100) NULL COMMENT '默认交易地点，选填',
     created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
