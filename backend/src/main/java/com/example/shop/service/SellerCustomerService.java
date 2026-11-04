@@ -105,7 +105,7 @@ public class SellerCustomerService {
                             .eq(Intent::getStatus, IntentStatus.SUCCESS.getCode())));
         }
         return new SellerCustomerDtos.CustomerView(
-                String.valueOf(b.getId()), b.getUsername(), b.getPhone(), b.getNickname(),
+                String.valueOf(b.getId()), b.getUsername(), b.getPhone(), b.getNickname(), b.getAddress(),
                 TimeUtil.format(b.getCreatedAt()), intentCount, successCount);
     }
 }
