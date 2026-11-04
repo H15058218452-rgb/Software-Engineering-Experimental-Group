@@ -15,33 +15,50 @@
       </div>
     </div>
 
-    <!-- 客户列表：只保留核心信息 -->
+    <!-- 客户列表 -->
     <el-table :data="list" border style="width: 100%" v-loading="loading">
-      <el-table-column prop="nickname" label="客户昵称" width="150" />
-      <el-table-column prop="phone" label="电话" width="150" />
-      <el-table-column label="注册时间" width="180">
+      <!-- 核心修复：优先显示 username -->
+      <el-table-column label="用户名" min-width="150" align="center">
+        <template #default="{ row }">
+          {{ row.username || row.nickname || '-' }}
+        </template>
+      </el-table-column>
+      
+      <el-table-column prop="phone" label="电话" width="150" align="center" />
+      
+      <!-- 预留默认交易地点（等后端加） -->
+      <el-table-column label="默认交易地点" min-width="180" align="center">
+        <template #default="{ row }">
+          <!-- 后端还没这个字段，暂时显示横杠 -->
+          {{ row.address || row.defaultAddress || '-' }}
+        </template>
+      </el-table-column>
+
+      <el-table-column label="注册时间" width="180" align="center">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      
+      <!-- 操作列固定在右侧 -->
+      <el-table-column label="操作" width="120" fixed="right" align="center">
         <template #default="{ row }">
           <el-button type="primary" link @click="openHistory(row)">查看历史</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 历史记录弹窗：严格对齐需求 A.2-2（不含价格） -->
-    <el-dialog v-model="dialogVisible" :title="`${currentCustomer?.nickname || '客户'} 的购买历史`" width="600px">
+    <!-- 历史记录弹窗 -->
+    <el-dialog v-model="dialogVisible" :title="`${currentCustomer?.username || '客户'} 的购买历史`" width="600px">
       <el-table :data="historyList" border v-loading="historyLoading">
         <el-table-column prop="productName" label="商品名称" min-width="150" />
-        <el-table-column label="下单时间" width="160">
+        <el-table-column label="下单时间" width="160" align="center">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="交易结果" width="120">
+        <el-table-column label="交易结果" width="120" align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">{{ row.statusText }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="交易时间" width="160">
+        <el-table-column label="交易时间" width="160" align="center">
           <template #default="{ row }">{{ formatTime(row.updatedAt || row.queuedAt) }}</template>
         </el-table-column>
       </el-table>
@@ -64,13 +81,11 @@ const currentCustomer = ref(null)
 const historyList = ref([])
 const historyLoading = ref(false)
 
-// 格式化时间 (2026-10-01T10:00:00 -> 2026-10-01 10:00:00)
 const formatTime = (timeStr) => {
   if (!timeStr) return '-'
   return timeStr.substring(0, 19).replace('T', ' ')
 }
 
-// 交易状态标签颜色
 const getStatusType = (status) => {
   const map = { 2: 'success', 3: 'info', 4: 'info', 6: 'danger' }
   return map[status] || 'warning'
@@ -111,6 +126,6 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
-.wrap { padding: 20px; background: #f5f7fa; min-height: 100vh; }
+.wrap { padding: 20px; background: #f5f7fa; min-height: 100vh; width: 100%; box-sizing: border-box; }
 .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 </style>
