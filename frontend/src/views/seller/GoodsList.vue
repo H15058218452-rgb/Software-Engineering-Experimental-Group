@@ -10,23 +10,26 @@
 
     <!-- 多商品列表 -->
     <el-table :data="productList" style="width: 100%" border v-loading="loading">
-      <el-table-column label="图片" width="100">
+      <el-table-column label="图片" width="100" align="center">
         <template #default="{ row }">
           <img :src="row.image || 'https://via.placeholder.com/60'" style="width: 60px; height: 60px; object-fit: contain;" />
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="商品名称" min-width="150" />
-      <el-table-column prop="categoryName" label="所属类别" width="150">
+      
+      <el-table-column prop="name" label="商品名称" min-width="150" show-overflow-tooltip />
+      
+      <el-table-column prop="categoryName" label="所属类别" width="110">
         <template #default="{ row }">
           {{ row.categoryName || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="price" label="价格" width="100">
+      
+      <el-table-column prop="price" label="价格" width="90">
         <template #default="{ row }">¥{{ row.price }}</template>
       </el-table-column>
       
-      <!-- 库存列，带修改功能 -->
-      <el-table-column label="库存" width="120">
+      <!-- 库存列 -->
+      <el-table-column label="库存" width="100" align="center">
         <template #default="{ row }">
           <span :style="{ color: row.stock === 0 ? 'red' : 'green', fontWeight: 'bold' }">
             {{ row.stock }}
@@ -35,41 +38,34 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="状态" width="120">
+      <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+          <el-tag size="small" :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="320" fixed="right">
+      <!-- ⚠️ 去掉了 fixed="right"，让表格自己正常撑开 -->
+      <el-table-column label="操作" width="290">
         <template #default="{ row }">
           <div class="actions">
-            <!-- 状态 0：在售 -->
             <template v-if="row.status === 0">
               <el-button size="small" type="warning" @click="operate(row, 'freeze')">冻结</el-button>
               <el-button size="small" type="danger" @click="operate(row, 'off-shelf')">下架</el-button>
               <el-button size="small" type="success" @click="operate(row, 'start-trade')">开始交易</el-button>
             </template>
-
-            <!-- 状态 1：手动冻结 -->
             <template v-else-if="row.status === 1">
               <el-button size="small" type="success" @click="operate(row, 'unfreeze')">解冻</el-button>
               <el-button size="small" type="danger" @click="operate(row, 'off-shelf')">下架</el-button>
             </template>
-
-            <!-- 状态 2：交易中 -->
             <template v-else-if="row.status === 2">
               <el-button size="small" type="success" :loading="loading" @click="handleTrade(row, 'confirm-sold')">确认成交</el-button>
               <el-button size="small" type="danger" :loading="loading" @click="handleTrade(row, 'confirm-failed')">交易失败</el-button>
             </template>
-            
-            <!-- 状态 3：已下架/售罄 -->
             <template v-else-if="row.status === 3 || !row.status">
               <el-button v-if="row.stock > 0" size="small" type="success" @click="operate(row, 'shelf-on')">重新上架</el-button>
               <el-button v-else size="small" type="info" disabled>库存为0</el-button>
             </template>
             
-            <!-- 所有状态都可以查看意向 -->
             <el-button size="small" type="primary" @click="goToIntents(row.id)">查看意向</el-button>
           </div>
         </template>
@@ -125,7 +121,6 @@ const loadData = async () => {
   }
 }
 
-// 打开修改库存弹窗
 const openStockDialog = (row) => {
   stockDialog.productId = row.id
   stockDialog.stock = row.stock
@@ -133,7 +128,6 @@ const openStockDialog = (row) => {
   stockDialog.visible = true
 }
 
-// 确认修改库存
 const confirmStock = async () => {
   try {
     await updateStock(stockDialog.productId, stockDialog.stock, stockDialog.oldStock)
@@ -145,7 +139,6 @@ const confirmStock = async () => {
   }
 }
 
-// 普通操作
 const operate = async (row, action) => {
   loading.value = true
   try {
@@ -159,7 +152,6 @@ const operate = async (row, action) => {
   }
 }
 
-// 复杂的交易处理（确认成交/失败）
 const handleTrade = async (row, action) => {
   loading.value = true
   try {
@@ -202,7 +194,18 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
-.wrap { padding: 20px; background: #f5f7fa; min-height: 100vh; }
+.wrap { padding: 20px; background: #f5f7fa; min-height: 100vh; width: 100%; box-sizing: border-box; }
 .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 强制按钮在一行内，不换行 */
+.actions { 
+  display: flex; 
+  gap: 5px; 
+  flex-wrap: nowrap; 
+  align-items: center;
+}
+/* 让按钮小一点，防止宽度不够 */
+.actions :deep(.el-button) {
+  padding: 5px 8px;
+}
 </style>
