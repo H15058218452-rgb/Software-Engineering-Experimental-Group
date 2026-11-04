@@ -18,7 +18,9 @@ public interface BuyerAuthDtos {
             @Size(max = 20, message = "昵称最多 20 个字符")
             String nickname,
             @Pattern(regexp = "^$|^1[3-9]\\d{9}$", message = "手机号格式不正确，需为 11 位中国大陆手机号")
-            String phone) {
+            String phone,
+            @Size(max = 100, message = "默认交易地点最多 100 个字符")
+            String address) {
     }
 
     record LoginRequest(
