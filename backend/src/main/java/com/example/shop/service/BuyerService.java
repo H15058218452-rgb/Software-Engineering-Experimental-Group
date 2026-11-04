@@ -90,11 +90,11 @@ public class BuyerService {
         if (p.getStatus() != ProductStatus.ON_SALE.getCode()) {
             throw new BizException(ErrorCode.PRODUCT_FROZEN.getCode(), "商品已冻结/交易中，无法提交意向");
         }
-        // 同一买家（或同一手机号）同一商品仅一条有效意向
+        // 同一买家同一商品仅一条有效意向；手机号允许重复，故不再按手机号跨账号去重
         if (buyerId != null && intentMapper.countActiveByBuyer(p.getId(), buyerId) > 0) {
             throw new BizException(ErrorCode.DUPLICATE_INTENT);
         }
-        if (phone != null && intentMapper.countActiveByPhone(p.getId(), phone) > 0) {
+        if (buyerId == null && phone != null && intentMapper.countActiveByPhone(p.getId(), phone) > 0) {
             throw new BizException(ErrorCode.DUPLICATE_INTENT);
         }
         String code = generateCode();
