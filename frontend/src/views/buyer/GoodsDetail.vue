@@ -214,8 +214,9 @@ async function submitBuyIntent() {
   if (submitting.value) return
   submitting.value = true
   try {
-    // 修改点4：修复传参 Bug，直接传 productId 而不是对象
-    await submitIntent(productId)
+    // 必须传对象，这样 Axios 才会自动使用 application/json 格式发送
+    await submitIntent({ productId: productId }) 
+    
     showBuyModal.value = false
     ElMessage.success('购买意向提交成功！请在我的订单查看进度')
   } catch (e) {
