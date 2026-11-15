@@ -1,0 +1,135 @@
+{
+    "clientName": "Thunder Client",
+    "collectionName": "迭代2-核心接口回归测试",
+    "collectionId": "45005f87-f337-4425-80ec-280212581648",
+    "dateExported": "2026-11-03T13:39:01.315Z",
+    "version": "1.4",
+    "folders": [],
+    "requests": [
+        {
+            "_id": "04df1e04-2077-4df0-ab2a-7fdafcdbd03c",
+            "colId": "45005f87-f337-4425-80ec-280212581648",
+            "containerId": "",
+            "name": "卖家查看客户列表",
+            "url": "http://localhost:8080/api/seller/customers?page=1&pageSize=10",
+            "method": "GET",
+            "sortNum": 10000,
+            "created": "2026-11-03T13:30:39.343Z",
+            "modified": "2026-11-03T13:30:39.343Z",
+            "headers": [
+                {
+                    "name": "Authorization",
+                    "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzkzNzAyMjg3LCJleHAiOjE3OTM3ODg2ODd9.H2Ejljwks3m26FgIpiyqOliP-EJ2ATDAWEJ9mHTDyLs"
+                }
+            ],
+            "params": [
+                {
+                    "name": "page",
+                    "value": "1",
+                    "isPath": false
+                },
+                {
+                    "name": "pageSize",
+                    "value": "10",
+                    "isPath": false
+                }
+            ]
+        },
+        {
+            "_id": "2efb45e5-aee8-42a7-8ae6-f217870aecf1",
+            "colId": "45005f87-f337-4425-80ec-280212581648",
+            "containerId": "",
+            "name": "卖家登录",
+            "url": "http://localhost:8080/api/seller/login",
+            "method": "POST",
+            "sortNum": 20000,
+            "created": "2026-11-03T13:31:10.715Z",
+            "modified": "2026-11-03T13:31:10.715Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": [
+                    "{",
+                    "  \"username\": \"seller\",",
+                    "  \"password\": \"seller123456\"",
+                    "}"
+                ],
+                "form": []
+            },
+            "postReq": {
+                "inlineScripts": [
+                    {
+                        "script": [
+                            "tc.test(\"HTTP Status is 200\", function() {",
+                            "    tc.expect(tc.response.status).to.equal(200);",
+                            "});",
+                            "tc.test(\"Code is 0\", function() {",
+                            "    tc.expect(tc.response.json.code).to.equal(0);",
+                            "});",
+                            "tc.test(\"Has token\", function() {",
+                            "    tc.expect(tc.response.json.data).to.have.property('token');",
+                            "});"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "_id": "02cc513d-50b5-48ac-8400-3b8bed14d07a",
+            "colId": "45005f87-f337-4425-80ec-280212581648",
+            "containerId": "",
+            "name": "买家登录",
+            "url": "http://localhost:8080/api/buyer/login",
+            "method": "POST",
+            "sortNum": 30000,
+            "created": "2026-11-03T13:31:16.149Z",
+            "modified": "2026-11-03T13:31:16.149Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": [
+                    "{",
+                    "  \"phone\": \"13800000001\",",
+                    "  \"password\": \"wrong123\"",
+                    "}"
+                ],
+                "form": []
+            }
+        },
+        {
+            "_id": "3b2b13d8-7909-4985-863d-a90cdb237d6f",
+            "colId": "45005f87-f337-4425-80ec-280212581648",
+            "containerId": "",
+            "name": "买家注册",
+            "url": "http://localhost:8080/api/buyer/register",
+            "method": "POST",
+            "sortNum": 40000,
+            "created": "2026-11-03T13:31:20.068Z",
+            "modified": "2026-11-03T13:31:20.068Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": [
+                    "{",
+                    "  \"phone\": \"13800000001\",",
+                    "  \"password\": \"abc12345\",",
+                    "  \"nickname\": \"小明\"",
+                    "}"
+                ],
+                "form": []
+            },
+            "postReq": {
+                "inlineScripts": [
+                    {
+                        "script": [
+                            "tc.test(\"HTTP Status is 200\", function() {",
+                            "    tc.expect(tc.response.status).to.equal(200);",
+                            "});"
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "ref": "lrkjebeTJYqbK-_pUMOqFRLntYPge9UOOOIQcYjnAcR9OIz6X9FohfRdNlzmGapAxZXzeULqEGFqya1t2TO4CQ"
+}

@@ -136,6 +136,52 @@ export async function getCustomerHistory(customerId) {
   return success(result)
 }
 
+// 12. 订单管理（挑战需求 B.1）
+// 订单状态：0 客户下单 / 1 商家确认 / 2 备货完成 / 3 开始发货 / 4 交易完成 / 5 已取消
+// 说明：后端订单接口尚未实现，前端 OrderList.vue 目前使用模拟数据演示；
+// 后端接口就位后，在这里补上真实调用（预计路径见下方注释）。
+export async function getOrderList(params) {
+  const result = await request.get('/seller/orders', { params })
+  const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
+  return success({ list, total: result?.total || list.length })
+}
+
+// 订单状态流转：action = confirm(商家确认) / stocked(备货完成) / ship(开始发货) / complete(交易完成)
+export async function advanceOrder(orderId, action) {
+  const endpoints = {
+    confirm: '/seller/orders/confirm',
+    stocked: '/seller/orders/stocked',
+    ship: '/seller/orders/ship',
+    complete: '/seller/orders/complete'
+  }
+  const endpoint = endpoints[action]
+  if (!endpoint) throw { code: 40001, message: `不支持的订单操作：${action}` }
+  const result = await request.post(endpoint, { orderId: Number(orderId), requestId: genRequestId() })
+  return success(result, '操作成功')
+}
+
+// 商家取消订单（交易完成前可取消）
+export async function cancelOrder(orderId) {
+  const result = await request.post('/seller/orders/cancel', { orderId: Number(orderId), requestId: genRequestId() })
+  return success(result, '订单已取消')
+}
+
+// 13. 历史管理（已下架商品历史）
+export async function getHistoryProducts(params) {
+  const result = await request.get('/seller/history/products', { params })
+  return success({
+    list: result?.list ?? result?.records ?? [],
+    total: result?.total || 0
+  })
+}
+
+// 获取某个历史商品的历史意向记录
+export async function getHistoryIntents(productId) {
+  const result = await request.get(`/seller/history/products/${productId}/intents`)
+  const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
+  return success(list)
+}
+
 // 兼容旧代码空壳
 export function updateGoods() { return Promise.reject({ code: 40001, message: '暂不支持编辑' }) }
 export function getGoodsDetail() { return Promise.reject({ code: 40001, message: '暂无详情接口' }) }

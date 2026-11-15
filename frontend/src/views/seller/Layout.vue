@@ -15,6 +15,9 @@
         <router-link to="/seller/intents">查看意向购买人</router-link>
         <!-- 👇 新增这一行 -->
         <router-link to="/seller/customers">客户管理</router-link>
+        <!-- 👇 挑战需求 B：新增订单管理、历史管理 -->
+        <router-link to="/seller/orders">订单管理</router-link>
+        <router-link to="/seller/history">历史管理</router-link>
         <router-link to="/seller/password">修改密码</router-link>
       </aside>
       <main class="main"><router-view /></main>
