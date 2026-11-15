@@ -47,5 +47,6 @@ const logout = () => {
 .side { width: 180px; background: #fff; border-right: 1px solid #e5e5e5; padding-top: 12px; min-height: calc(100vh - 56px); }
 .side a { display: block; padding: 14px 24px; color: #333; text-decoration: none; font-size: 14px; }
 .side a.router-link-active { background: #c7000b; color: #fff; }
-.main { flex: 1; padding: 20px; }
+.main { 
+  flex: 1; padding: 20px; width: 0; overflow-x: auto;}
 </style>

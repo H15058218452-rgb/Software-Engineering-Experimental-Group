@@ -19,6 +19,9 @@ public interface IntentMapper extends BaseMapper<Intent> {
     @Select("SELECT COUNT(*) FROM intent WHERE product_id = #{productId} AND phone = #{phone} AND status IN (0,1,5)")
     int countActiveByPhone(@Param("productId") Long productId, @Param("phone") String phone);
 
+    @Select("SELECT COUNT(*) FROM intent WHERE product_id = #{productId} AND buyer_id = #{buyerId} AND status IN (0,1,5)")
+    int countActiveByBuyer(@Param("productId") Long productId, @Param("buyerId") Long buyerId);
+
     @Select("SELECT COUNT(*) + 1 FROM intent WHERE product_id = #{productId} AND status IN (0,5) AND (queued_at < #{queuedAt} OR (queued_at = #{queuedAt} AND id < #{id}))")
     int calcQueuePosition(@Param("productId") Long productId, @Param("queuedAt") LocalDateTime queuedAt, @Param("id") Long id);
 

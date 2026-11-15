@@ -27,7 +27,6 @@ public enum ErrorCode {
     STOCK_NOT_ENOUGH(40915, "库存不足"),
     STOCK_BELOW_ZERO(40916, "库存不能为负"),
     IMAGES_TOO_MANY(40917, "商品图库最多 9 张"),
-    PHONE_ALREADY_REGISTERED(40918, "手机号已注册"),
     USERNAME_ALREADY_REGISTERED(40919, "用户名已注册"),
     SYSTEM_ERROR(50000, "系统错误");
 

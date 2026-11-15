@@ -1,6 +1,9 @@
 package com.example.shop.controller;
 
+import com.example.shop.auth.JwtUtil;
 import com.example.shop.common.ApiResponse;
+import com.example.shop.common.BizException;
+import com.example.shop.common.ErrorCode;
 import com.example.shop.common.IdempotencyService;
 import com.example.shop.dto.BuyerDtos;
 import com.example.shop.dto.CommonDtos;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,12 +32,14 @@ public class BuyerController {
     private final ProductQueryService queryService;
     private final BuyerService buyerService;
     private final IdempotencyService idempotencyService;
+    private final JwtUtil jwtUtil;
 
     public BuyerController(ProductQueryService queryService, BuyerService buyerService,
-                           IdempotencyService idempotencyService) {
+                           IdempotencyService idempotencyService, JwtUtil jwtUtil) {
         this.queryService = queryService;
         this.buyerService = buyerService;
         this.idempotencyService = idempotencyService;
+        this.jwtUtil = jwtUtil;
     }
 
     /** 基线单商品接口（兼容保留）：最近一件未下架商品。 */
@@ -62,9 +68,40 @@ public class BuyerController {
     }
 
     @PostMapping("/intent")
-    public ApiResponse<BuyerDtos.SubmitIntentResponse> submit(@Valid @RequestBody BuyerDtos.SubmitIntentRequest req) {
+    public ApiResponse<BuyerDtos.SubmitIntentResponse> submit(
+            @Valid @RequestBody BuyerDtos.SubmitIntentRequest req,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
         String key = (req.requestId() == null || req.requestId().isBlank()) ? null : "buyer:intent:" + req.requestId();
-        return idempotencyService.execute(key, () -> ApiResponse.ok(buyerService.submit(req)));
+        Long buyerId = resolveBuyerId(authorization);
+        // 带了 Token 但已失效：按未登录处理，前端会跳转登录页；完全不带 Token 的旧调用保持匿名兼容
+        if (buyerId == null && authorization != null && !authorization.isBlank()) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return idempotencyService.execute(key, () -> ApiResponse.ok(buyerService.submit(req, buyerId)));
+    }
+
+    /**
+     * 我的订单（需求 A.2-2）：登录买家查看自己的历史下单记录，提交时间倒序分页。
+     * 未登录（无 Token / Token 失效）返回 40101。
+     */
+    @GetMapping("/orders")
+    public ApiResponse<CommonDtos.PageResult<BuyerDtos.OrderItem>> orders(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        Long buyerId = resolveBuyerId(authorization);
+        if (buyerId == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return ApiResponse.ok(buyerService.orders(buyerId, page, pageSize));
+    }
+
+    /** 解析买家 Token；未携带或失效时返回 null（买家浏览类接口本身允许匿名） */
+    private Long resolveBuyerId(String authorization) {
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return jwtUtil.parse(authorization.substring(7));
+        }
+        return null;
     }
 
     @GetMapping("/intent")

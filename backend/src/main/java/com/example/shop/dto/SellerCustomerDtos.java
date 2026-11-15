@@ -7,8 +7,8 @@ package com.example.shop.dto;
 public interface SellerCustomerDtos {
 
     /** 客户列表项：注册信息 + 意向统计。 */
-    record CustomerView(String id, String username, String phone, String nickname, String createdAt,
-                        Integer intentCount, Integer successCount) {
+    record CustomerView(String id, String username, String phone, String nickname, String address,
+                        String createdAt, Integer intentCount, Integer successCount) {
     }
 
     /** 客户的单条购买/意向记录：带商品快照信息。 */

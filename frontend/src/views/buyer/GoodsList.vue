@@ -75,8 +75,12 @@
           @click="goToDetail(item.id)"
         >
           <div class="goods-image">
-            <!-- 主图取图库第一张，若无则显示占位图 -->
-            <img :src="item.mainImage || '/placeholder.png'" alt="商品图片" />
+            <!-- 修改点：使用 getImageUrl 处理路径，@error 处理加载失败 -->
+            <img 
+              :src="getImageUrl(item.mainImage || item.imageUrl)" 
+              alt="商品图片" 
+              @error="handleImageError"
+            />
           </div>
           <div class="goods-info">
             <h3 class="goods-name">{{ item.name }}</h3>
@@ -210,6 +214,29 @@ function handleLogout() {
   window.location.reload()
 }
 
+// ============ 新增：图片处理逻辑 ============
+// 处理图片路径拼接
+function getImageUrl(url) {
+  // 如果没传图片，直接返回网络占位图
+  if (!url || url.trim() === '') {
+    return 'https://via.placeholder.com/300x300?text=暂无图片'
+  }
+  // 如果是完整的网络图片直接返回
+  if (url.startsWith('http')) {
+    return url
+  }
+  // 如果是相对路径，拼上后端的 8080 地址
+  return `http://localhost:8080/${url.startsWith('/') ? url.slice(1) : url}`
+}
+
+// 处理图片加载失败（比如后端图片路径不对、图片被删了）
+function handleImageError(e) {
+  // 避免死循环（如果占位图也挂了，就不再替换）
+  if (e.target.src.includes('placeholder.com')) return;
+  e.target.src = 'https://via.placeholder.com/300x300?text=图片加载失败'
+}
+// ==========================================
+
 onMounted(() => {
   loadCategories()
   loadProducts()
@@ -286,7 +313,7 @@ onMounted(() => {
 .goods-info { padding: 16px; display: flex; flex-direction: column; flex: 1; }
 .goods-name {
   font-size: 16px; color: #333; margin: 0 0 8px; font-weight: 500;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .goods-category { font-size: 12px; color: #999; margin-bottom: 12px; }
 .goods-price { color: #e60012; font-size: 20px; font-weight: bold; margin-top: auto; }

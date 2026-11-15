@@ -14,6 +14,8 @@ public class Buyer {
     private String phone;
     private String passwordHash;
     private String nickname;
+    /** 默认交易地点，选填；卖家客户管理列表展示 */
+    private String address;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -27,6 +29,8 @@ public class Buyer {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getNickname() { return nickname; }
     public void setNickname(String nickname) { this.nickname = nickname; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
