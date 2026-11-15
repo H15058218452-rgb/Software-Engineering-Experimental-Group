@@ -1,28 +1,7 @@
 <template>
   <div class="goods-page">
-    <!-- 主头部 -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <img :src="logoImg" alt="ShopMall" @click="router.push('/buyer/goods')" />
-        </div>
-        <nav class="nav">
-          <router-link to="/buyer/goods" class="nav-item">首页</router-link>
-          <router-link to="/buyer/orders" class="nav-item">我的订单</router-link>
-        </nav>
-        <div class="user-actions">
-          <template v-if="isLoggedIn">
-            <el-button link type="danger" @click="handleLogout">退出</el-button>
-          </template>
-          <template v-else>
-            <router-link to="/buyer/login" class="login-btn">登录</router-link>
-            <span class="divider">|</span>
-            <router-link to="/buyer/register" class="register-btn">注册</router-link>
-          </template>
-          <router-link to="/seller/login" class="seller-entry">卖家入口</router-link>
-        </div>
-      </div>
-    </header>
+    <!-- 主头部（公共组件） -->
+    <BuyerHeader />
 
     <!-- 面包屑 -->
     <div class="breadcrumb">
@@ -44,14 +23,12 @@
             <el-carousel v-if="product.images && product.images.length > 0" height="460px" :autoplay="false">
               <el-carousel-item v-for="(img, index) in product.images" :key="index">
                 <div class="carousel-img-wrap">
-                  <!-- 修改点1：使用 getImageUrl 处理图片路径 -->
                   <img :src="getImageUrl(img)" alt="商品图片" />
                 </div>
               </el-carousel-item>
             </el-carousel>
             <!-- 没有图时显示占位图 -->
             <div v-else class="carousel-img-wrap">
-              <!-- 修改点2：使用在线占位图，防止报错 -->
               <img :src="getImageUrl('')" alt="暂无图片" />
             </div>
           </div>
@@ -67,21 +44,40 @@
               <span class="meta-item">状态：{{ getStatusText(product.status) }}</span>
             </div>
 
-            <!-- 异常提示 -->
-            <div v-if="product.status !== 0" class="tips error-tip">
-              商品已下架或冻结，暂时无法购买
+            <!-- 异常提示（商品状态已收敛为在售 / 已下架两态） -->
+            <div v-if="!isOnSale" class="tips error-tip">
+              商品已下架，暂时无法购买
             </div>
-            <div v-else-if="product.stock <= 0" class="tips error-tip">
+            <div v-else-if="Number(product.stock) <= 0" class="tips error-tip">
               商品已售罄
             </div>
 
-            <button
-              class="buy-btn"
-              :disabled="!canBuy"
-              @click="handleBuyClick"
-            >
-              {{ canBuy ? '提交购买意向' : (product.stock <= 0 ? '已售罄' : '暂不可买') }}
-            </button>
+            <!-- 购买数量（同款可买多件，单条上限 99 件） -->
+            <div class="qty-row">
+              <span class="qty-label">数量</span>
+              <el-input-number
+                v-model="quantity"
+                :min="1"
+                :max="maxQuantity"
+                :disabled="!canBuy"
+                size="default"
+              />
+              <span class="qty-tip">单次最多 {{ maxQuantity }} 件，加入购物车后可再修改</span>
+            </div>
+
+            <!-- 操作区：详情页只做「加入购物车」，不提供立即购买旁路 -->
+            <div class="btn-row">
+              <button class="buy-btn" :disabled="!canBuy || adding" @click="handleAddCart">
+                {{ addBtnText }}
+              </button>
+              <button
+                class="fav-btn"
+                :class="{ 'is-fav': isFavorited }"
+                @click="handleFavorite"
+              >
+                {{ isFavorited ? '已收藏' : '收藏' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -104,39 +100,18 @@
         <span>© 2026 ShopMall. All Rights Reserved.</span>
       </div>
     </footer>
-
-    <!-- 购买意向确认弹窗 -->
-    <transition name="modal-fade">
-      <div v-if="showBuyModal" class="modal-mask" @click.self="showBuyModal = false">
-        <div class="modal">
-          <div class="modal-header">
-            <h3>确认提交意向</h3>
-            <button class="close-btn" @click="showBuyModal = false">×</button>
-          </div>
-          <div class="modal-body">
-            <p class="confirm-text">您确定要提交对该商品的购买意向吗？</p>
-            <p class="confirm-tip">提交后将进入排队队列，请耐心等待卖家处理。</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="showBuyModal = false">取消</button>
-            <button class="btn-submit" :disabled="submitting" @click="submitBuyIntent">
-              {{ submitting ? '提交中...' : '确认提交' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getProductDetail, submitIntent } from '@/api/buyer'
+import { getProductDetail, addToCart, addFavorite, removeFavorite, getFavoriteList } from '@/api/buyer'
 import { STORAGE_KEYS } from '@/constants/storageKeys'
 import { formatMoney } from '@/utils/format'
-import logoImg from '@/assets/logo.png'
+import { pushPendingCart } from '@/utils/pendingCart'
+import BuyerHeader from '@/components/BuyerHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -146,25 +121,37 @@ const product = ref(null)
 const loading = ref(false)
 const error = ref('')
 
-const showBuyModal = ref(false)
-const submitting = ref(false)
+const quantity = ref(1)
+const adding = ref(false)
+const isFavorited = ref(false)
 
 const isLoggedIn = computed(() => !!localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN))
 
-// 判断是否能购买
-const canBuy = computed(() => {
-  if (!product.value) return false
-  // 状态 0 为在售，且库存 > 0
-  return product.value.status === 0 && product.value.stock > 0
+// 商品是否在售：迭代 3 起只有「在售 / 已下架」两态，0 = 在售
+const isOnSale = computed(() => Number(product.value?.status) === 0)
+
+// 判断是否能购买：在售且库存 > 0
+const canBuy = computed(() => isOnSale.value && Number(product.value?.stock) > 0)
+
+// 可购数量上限：库存与单条 99 件取小
+const maxQuantity = computed(() => {
+  const stock = Number(product.value?.stock ?? 1)
+  return Math.max(1, Math.min(99, stock > 0 ? stock : 1))
 })
 
-// 状态映射
+const addBtnText = computed(() => {
+  if (adding.value) return '加入中...'
+  if (!isOnSale.value) return '已下架'
+  if (Number(product.value?.stock) <= 0) return '已售罄'
+  return '加入购物车'
+})
+
+// 状态映射：两态口径
 function getStatusText(status) {
-  const map = { 0: '在售', 1: '手动冻结', 2: '交易中冻结', 3: '已下架' }
-  return map[status] || '未知'
+  return Number(status) === 0 ? '在售' : '已下架'
 }
 
-// 修改点3：处理图片路径拼接，防止红屏和裂图
+// 处理图片路径拼接，防止红屏和裂图
 function getImageUrl(url) {
   // 如果没有图片，返回在线占位图
   if (!url) return 'https://via.placeholder.com/460x460?text=No+Image'
@@ -193,52 +180,78 @@ async function loadDetail() {
   }
 }
 
-// 点击购买按钮
-function handleBuyClick() {
-  if (!canBuy.value) return
+// 查询当前商品是否已被收藏（收藏上限 200 条，一次拉全即可判断，不额外增接口）
+async function loadFavoriteState() {
+  if (!isLoggedIn.value || !productId) return
+  try {
+    const res = await getFavoriteList({ page: 1, size: 200 })
+    const list = res?.list || []
+    isFavorited.value = list.some(item => String(item.productId) === String(productId))
+  } catch (e) {
+    /* 收藏状态查询失败不影响主流程，静默处理 */
+  }
+}
 
-  // 1. 未登录拦截
+// 未登录统一引导登录，并记住回跳页面
+function redirectToLogin() {
+  router.push({ path: '/buyer/login', query: { redirect: route.fullPath } })
+}
+
+// 加入购物车
+async function handleAddCart() {
+  if (!canBuy.value || adding.value) return
+
+  // 1. 未登录：先存临时加购，登录成功后自动恢复（B.2-2 组内拟定）
   if (!isLoggedIn.value) {
-    ElMessage.warning('请先登录后再提交购买意向')
-    // 记录当前页面路径，登录后跳回来
-    router.push({ path: '/buyer/login', query: { redirect: route.fullPath } })
+    const result = pushPendingCart(productId, quantity.value)
+    if (!result.ok) return ElMessage.warning(result.reason)
+    ElMessage.warning('请先登录，登录后将自动把该商品加入购物车')
+    redirectToLogin()
     return
   }
-  
-  // 2. 已登录，弹窗确认
-  showBuyModal.value = true
-}
 
-// 真正提交请求
-async function submitBuyIntent() {
-  if (submitting.value) return
-  submitting.value = true
+  // 2. 已登录：直接加购
+  adding.value = true
   try {
-    // 必须传对象，这样 Axios 才会自动使用 application/json 格式发送
-    await submitIntent({ productId: productId }) 
-    
-    showBuyModal.value = false
-    ElMessage.success('购买意向提交成功！请在我的订单查看进度')
+    await addToCart(productId, quantity.value)
+    ElMessage.success('已加入购物车')
   } catch (e) {
-    ElMessage.error(e.message || '提交失败，请重试')
-    // 如果是库存不足或已下架，刷新页面状态
-    if (e.code === 40903 || e.code === 40909) {
-      showBuyModal.value = false
-      loadDetail()
-    }
+    ElMessage.error(e.message || '加入购物车失败')
+    // 数量超限 / 购物车已满 / 商品已下架，刷新详情保证展示的是最新状态
+    if ([40931, 40932, 40926].includes(e.code)) loadDetail()
   } finally {
-    submitting.value = false
+    adding.value = false
   }
 }
 
-function handleLogout() {
-  localStorage.removeItem(STORAGE_KEYS.BUYER_TOKEN)
-  ElMessage.success('已退出登录')
-  window.location.reload()
+// 收藏 / 取消收藏
+async function handleFavorite() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再收藏')
+    return redirectToLogin()
+  }
+  try {
+    if (isFavorited.value) {
+      await removeFavorite(productId)
+      isFavorited.value = false
+      ElMessage.success('已取消收藏')
+    } else {
+      await addFavorite(productId)
+      isFavorited.value = true
+      ElMessage.success('收藏成功')
+    }
+  } catch (e) {
+    if (e.code === 40931) {
+      ElMessage.warning('收藏已达 200 条上限，请先到「我的收藏」清理后再收藏')
+    } else {
+      ElMessage.error(e.message || '操作失败，请重试')
+    }
+  }
 }
 
 onMounted(() => {
   loadDetail()
+  loadFavoriteState()
 })
 </script>
 
@@ -248,21 +261,6 @@ onMounted(() => {
   background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
   color: #333;
 }
-
-/* 头部（复用列表页） */
-.header { background: #fff; }
-.header-inner {
-  max-width: 1200px; margin: 0 auto; height: 80px;
-  display: flex; align-items: center; padding: 0 20px; gap: 24px;
-}
-.logo img { height: 28px; cursor: pointer; }
-.nav { flex: 1; display: flex; gap: 32px; margin-left: 20px; }
-.nav-item { color: #333; text-decoration: none; font-size: 15px; }
-.nav-item:hover { color: #e60012; }
-.user-actions { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.user-actions a { color: #333; text-decoration: none; }
-.login-btn:hover, .register-btn:hover { color: #e60012; }
-.seller-entry { color: #999 !important; margin-left: 10px; }
 
 /* 面包屑 */
 .breadcrumb {
@@ -300,12 +298,25 @@ onMounted(() => {
   padding-bottom: 20px; border-bottom: 1px solid #f0f0f0;
 }
 .tips { font-size: 14px; color: #e60012; margin-bottom: 16px; background: #fff0f0; padding: 10px; }
+
+/* 数量选择 */
+.qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.qty-label { font-size: 14px; color: #666; }
+.qty-tip { font-size: 12px; color: #999; }
+
+/* 操作按钮 */
+.btn-row { display: flex; gap: 12px; margin-top: auto; }
 .buy-btn {
   width: 200px; height: 50px; border: none; background: #e60012; color: #fff;
-  font-size: 16px; cursor: pointer; transition: background 0.2s; margin-top: auto;
+  font-size: 16px; cursor: pointer; transition: background 0.2s;
 }
 .buy-btn:hover:not(:disabled) { background: #c5000f; }
 .buy-btn:disabled { background: #ccc; cursor: not-allowed; }
+.fav-btn {
+  width: 140px; height: 50px; border: 1px solid #ddd; background: #fff; color: #333;
+  font-size: 16px; cursor: pointer; transition: all 0.2s;
+}
+.fav-btn:hover, .fav-btn.is-fav { border-color: #e60012; color: #e60012; }
 
 /* 图文详情 */
 .detail-section {
@@ -323,23 +334,4 @@ onMounted(() => {
 
 /* 底部 */
 .footer { background: #1a1a1a; color: #666; text-align: center; padding: 30px 0; font-size: 13px; margin-top: auto; }
-
-/* 弹窗 */
-.modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.modal { background: #fff; width: 400px; max-width: 92vw; box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
-.modal-header { position: relative; padding: 20px; border-bottom: 1px solid #f0f0f0; text-align: center; }
-.modal-header h3 { margin: 0; font-size: 18px; color: #333; }
-.close-btn { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); border: none; background: transparent; font-size: 24px; color: #999; cursor: pointer; }
-.modal-body { padding: 30px 20px; text-align: center; }
-.confirm-text { font-size: 16px; color: #333; margin: 0 0 10px; font-weight: 500; }
-.confirm-tip { font-size: 13px; color: #999; margin: 0; }
-.modal-footer { display: flex; padding: 0 20px 20px; gap: 12px; }
-.btn-cancel, .btn-submit { flex: 1; height: 40px; border: none; cursor: pointer; font-size: 14px; }
-.btn-cancel { background: #f5f5f5; color: #333; }
-.btn-submit { background: #e60012; color: #fff; }
-.btn-submit:disabled { background: #ccc; }
-
-/* 过渡 */
-.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.25s ease; }
-.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
 </style>

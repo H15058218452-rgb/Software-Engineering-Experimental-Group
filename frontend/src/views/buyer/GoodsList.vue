@@ -7,30 +7,8 @@
       </div>
     </transition>
 
-    <!-- 主头部 -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <img :src="logoImg" alt="ShopMall" @click="router.push('/buyer/goods')" />
-        </div>
-        <nav class="nav">
-          <router-link to="/buyer/goods" class="nav-item active">首页</router-link>
-          <router-link to="/buyer/orders" class="nav-item">我的订单</router-link>
-        </nav>
-        <div class="user-actions">
-          <template v-if="isLoggedIn">
-            <span class="welcome">Hi, 用户</span>
-            <el-button link type="danger" @click="handleLogout">退出</el-button>
-          </template>
-          <template v-else>
-            <router-link to="/buyer/login" class="login-btn">登录</router-link>
-            <span class="divider">|</span>
-            <router-link to="/buyer/register" class="register-btn">注册</router-link>
-          </template>
-          <router-link to="/seller/login" class="seller-entry">卖家入口</router-link>
-        </div>
-      </div>
-    </header>
+    <!-- 主头部（公共组件：首页 / 购物车 / 我的收藏 / 我的订单） -->
+    <BuyerHeader />
 
     <!-- 搜索与筛选区 -->
     <div class="filter-bar">
@@ -113,21 +91,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { getProductList, getCategories } from '@/api/buyer'
-import { STORAGE_KEYS } from '@/constants/storageKeys'
 import { formatMoney } from '@/utils/format'
-import logoImg from '@/assets/logo.png'
+import BuyerHeader from '@/components/BuyerHeader.vue'
 
 const router = useRouter()
-
-// 登录状态
-const isLoggedIn = computed(() => {
-  return !!localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN)
-})
 
 // 数据状态
 const loading = ref(false)
@@ -206,14 +178,6 @@ function goToDetail(id) {
   router.push(`/buyer/goods/detail/${id}`)
 }
 
-// 退出登录
-function handleLogout() {
-  localStorage.removeItem(STORAGE_KEYS.BUYER_TOKEN)
-  ElMessage.success('已退出登录')
-  // 刷新页面重置状态
-  window.location.reload()
-}
-
 // ============ 新增：图片处理逻辑 ============
 // 处理图片路径拼接
 function getImageUrl(url) {
@@ -256,29 +220,16 @@ onMounted(() => {
   color: #333;
 }
 
-/* 提示条 */
+/* 提示条：下移到筛选区之下，避免与新增的导航项（购物车 / 收藏）文字重叠 */
 .top-bar {
-  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: 150px; left: 50%; transform: translateX(-50%);
   z-index: 1000; background: #000; color: #ccc; font-size: 12px;
   padding: 10px 24px; white-space: nowrap; pointer-events: none;
 }
 .slide-up-leave-active { transition: opacity 0.4s ease, transform 0.4s ease; }
 .slide-up-leave-to { opacity: 0; transform: translateX(-50%) translateY(-30px); }
 
-/* 头部 */
-.header { background: #fff; }
-.header-inner {
-  max-width: 1200px; margin: 0 auto; height: 80px;
-  display: flex; align-items: center; padding: 0 20px; gap: 24px;
-}
-.logo img { height: 28px; cursor: pointer; }
-.nav { flex: 1; display: flex; gap: 32px; margin-left: 20px; }
-.nav-item { color: #333; text-decoration: none; font-size: 15px; }
-.nav-item:hover, .nav-item.active { color: #e60012; font-weight: bold; }
-.user-actions { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.user-actions a { color: #333; text-decoration: none; }
-.login-btn:hover, .register-btn:hover { color: #e60012; }
-.seller-entry { color: #999 !important; margin-left: 10px; }
+/* 头部样式由 BuyerHeader 组件承载 */
 
 /* 筛选区 */
 .filter-bar { background: #fff; border-top: 1px solid #f0f0f0; padding: 16px 0; }
