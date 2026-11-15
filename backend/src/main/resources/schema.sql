@@ -87,3 +87,28 @@ CREATE TABLE IF NOT EXISTS intent (
     KEY idx_intent_product_phone (product_id, phone),
     KEY idx_intent_buyer (buyer_id, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家意向表（排队队列）';
+
+-- 购物车表（需求 B2-1）：同一买家 + 商品唯一，重复加入时累加数量
+CREATE TABLE IF NOT EXISTS cart (
+    id         BIGINT      NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT      NOT NULL COMMENT '所属买家ID',
+    product_id BIGINT      NOT NULL COMMENT '商品ID',
+    quantity   INT         NOT NULL DEFAULT 1 COMMENT '数量，>=1 且不超过库存',
+    selected   TINYINT     NOT NULL DEFAULT 1 COMMENT '1勾选用于结算 0未勾选',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_cart_buyer_product (buyer_id, product_id),
+    KEY idx_cart_buyer (buyer_id, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '购物车表';
+
+-- 收藏表（需求 B2-2）：同一买家 + 商品唯一
+CREATE TABLE IF NOT EXISTS favorite (
+    id         BIGINT      NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT      NOT NULL COMMENT '所属买家ID',
+    product_id BIGINT      NOT NULL COMMENT '商品ID',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_favorite_buyer_product (buyer_id, product_id),
+    KEY idx_favorite_buyer (buyer_id, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收藏表';
