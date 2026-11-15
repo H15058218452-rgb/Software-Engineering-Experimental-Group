@@ -11,6 +11,18 @@ export default [
     component: () => import('@/views/buyer/GoodsDetail.vue')
   },
   {
+    path: '/buyer/cart',
+    name: 'buyer-cart',
+    component: () => import('@/views/buyer/Cart.vue'),
+    meta: { requiresBuyerAuth: true } // 购物车需登录（B.2-2）
+  },
+  {
+    path: '/buyer/favorites',
+    name: 'buyer-favorites',
+    component: () => import('@/views/buyer/Favorites.vue'),
+    meta: { requiresBuyerAuth: true } // 收藏需登录（B.2-1）
+  },
+  {
     path: '/buyer/login',
     name: 'buyer-login',
     component: () => import('@/views/buyer/Login.vue')
