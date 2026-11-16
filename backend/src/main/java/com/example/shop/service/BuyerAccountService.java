@@ -64,6 +64,6 @@ public class BuyerAccountService {
     private BuyerAuthDtos.AuthResponse toAuthResponse(Buyer buyer) {
         BuyerAuthDtos.BuyerProfile profile = new BuyerAuthDtos.BuyerProfile(
                 String.valueOf(buyer.getId()), buyer.getUsername(), buyer.getPhone(), buyer.getNickname());
-        return new BuyerAuthDtos.AuthResponse(jwtUtil.generate(buyer.getId()), profile);
+        return new BuyerAuthDtos.AuthResponse(jwtUtil.generate(buyer.getId(), JwtUtil.ROLE_BUYER), profile);
     }
 }
