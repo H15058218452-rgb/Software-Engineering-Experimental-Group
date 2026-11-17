@@ -17,7 +17,8 @@
 import { ERROR_MESSAGE } from '@/constants/errorCodes'
 
 /* ---------------------------- 总开关 ---------------------------- */
-export const MOCK_ENABLED = true
+// false = 走真实后端（当前联调状态）；true = 用下面的假数据自测
+export const MOCK_ENABLED = false
 
 /* ------------------ 场景开关（改完刷新页面生效） ------------------ */
 export const MOCK_CONFIG = {
@@ -275,6 +276,11 @@ function isOnSale(product) {
   return !!product && Number(product.status) === 0
 }
 
+// 购物车条目定位：真实后端按 productId 定位，mock 内部按 cartId 存，两者都接受
+function sameLine(line, id) {
+  return String(line.cartId) === String(id) || String(line.productId) === String(id)
+}
+
 function pad(n) {
   return String(n).padStart(2, '0')
 }
@@ -459,14 +465,14 @@ export const mockApi = {
     })
   },
 
-  updateCartQuantity(cartId, quantity) {
+  updateCartQuantity(id, quantity) {
     return wrap(() => {
       const db = loadDb()
       const qty = Number(quantity)
       if (!qty || qty < 1) bizError(40001)
       if (qty > 99) bizError(40932)
 
-      const line = db.cart.find(l => String(l.cartId) === String(cartId))
+      const line = db.cart.find(l => sameLine(l, id))
       if (!line) bizError(40935)
 
       line.quantity = qty
@@ -475,23 +481,24 @@ export const mockApi = {
     })
   },
 
-  removeCartItem(cartId) {
+  removeCartItem(id) {
     return wrap(() => {
       const db = loadDb()
-      db.cart = db.cart.filter(l => String(l.cartId) !== String(cartId))
+      db.cart = db.cart.filter(l => !sameLine(l, id))
       saveDb(db)
       return { ok: true }
     })
   },
 
   // 结算下单：校验已下架 → 校验库存 → 建单 → 清空已结算条目
-  checkoutCart(cartIds = []) {
+  // 入参可以是 cartId 也可以是 productId（真实后端按 productId）
+  checkoutCart(ids = []) {
     return wrap(() => {
       const db = loadDb()
-      const ids = cartIds.map(String)
-      if (ids.length === 0) bizError(40933)
+      const keys = ids.map(String)
+      if (keys.length === 0) bizError(40933)
 
-      const lines = db.cart.filter(l => ids.includes(String(l.cartId)))
+      const lines = db.cart.filter(l => keys.some(k => sameLine(l, k)))
       if (lines.length === 0) bizError(40933)
 
       // 1) 已下架商品不能进交易
@@ -519,19 +526,19 @@ export const mockApi = {
       db.orders.unshift(order)
 
       // 4) 已结算的购物车条目出车
-      db.cart = db.cart.filter(l => !ids.includes(String(l.cartId)))
+      db.cart = db.cart.filter(l => !keys.some(k => sameLine(l, k)))
       saveDb(db)
 
       return { orderNo: order.orderNo, totalAmount: order.totalAmount }
     })
   },
 
-  // 购物车多件转收藏（B.2-4）
-  cartToFavorite(cartIds = []) {
+  // 购物车多件转收藏（B.2-4）：入参 cartId / productId 均可
+  cartToFavorite(ids = []) {
     return wrap(() => {
       const db = loadDb()
-      const ids = cartIds.map(String)
-      const lines = db.cart.filter(l => ids.includes(String(l.cartId)))
+      const keys = ids.map(String)
+      const lines = db.cart.filter(l => keys.some(k => sameLine(l, k)))
       if (lines.length === 0) bizError(40933)
 
       let converted = 0
@@ -543,7 +550,7 @@ export const mockApi = {
         converted += 1
       })
 
-      db.cart = db.cart.filter(l => !ids.includes(String(l.cartId)))
+      db.cart = db.cart.filter(l => !keys.some(k => sameLine(l, k)))
       saveDb(db)
       return { converted }
     })
