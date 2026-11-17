@@ -21,9 +21,10 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** data 可能非空：库存不足时携带 shortage 清单，状态不允许时携带当前/期望状态。 */
     @ExceptionHandler(BizException.class)
-    public ApiResponse<Void> handleBiz(BizException e) {
-        return ApiResponse.fail(e.getCode(), e.getMessage());
+    public ApiResponse<Object> handleBiz(BizException e) {
+        return ApiResponse.fail(e.getCode(), e.getMessage(), e.getData());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

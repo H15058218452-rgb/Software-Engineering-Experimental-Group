@@ -33,6 +33,11 @@ public class ApiResponse<T> {
         return new ApiResponse<>(code, message, null);
     }
 
+    /** 业务失败但需要携带明细数据，如库存不足的 shortage 清单、状态流转的当前/期望状态。 */
+    public static <T> ApiResponse<T> fail(int code, String message, T data) {
+        return new ApiResponse<>(code, message, data);
+    }
+
     public int getCode() { return code; }
     public void setCode(int code) { this.code = code; }
     public String getMessage() { return message; }

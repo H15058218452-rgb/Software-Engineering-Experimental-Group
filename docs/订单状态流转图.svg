@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 560" width="1180" height="560" font-family="Microsoft YaHei, PingFang SC, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#1f6feb"/>
+    </marker>
+    <marker id="arrOrange" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#e07b00"/>
+    </marker>
+    <marker id="arrGray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#8b949e"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1180" height="560" fill="#ffffff"/>
+
+  <text x="40" y="46" font-size="22" font-weight="bold" fill="#1f2328">订单状态流转图（挑战需求 B）</text>
+  <text x="40" y="72" font-size="13" fill="#57606a">5 个业务状态按序推进，不可跳态、不可回退；交易完成与已取消为终态</text>
+
+  <!-- 起始点 -->
+  <circle cx="18" cy="148" r="8" fill="#1f2328"/>
+  <line x1="26" y1="148" x2="36" y2="148" stroke="#8b949e" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- 客户下单 -->
+  <rect x="40" y="110" width="180" height="76" rx="10" fill="#ffffff" stroke="#1f6feb" stroke-width="2"/>
+  <text x="130" y="141" font-size="17" font-weight="bold" fill="#1f2328" text-anchor="middle">客户下单</text>
+  <text x="130" y="165" font-size="12" fill="#57606a" text-anchor="middle">下单成功即扣减库存</text>
+  <text x="130" y="99" font-size="12" fill="#1f6feb" text-anchor="middle" font-weight="bold">10 · 订单创建</text>
+
+  <!-- 商家确认 -->
+  <line x1="222" y1="148" x2="262" y2="148" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrBlue)"/>
+  <text x="242" y="138" font-size="11" fill="#57606a" text-anchor="middle">确认</text>
+  <rect x="266" y="110" width="180" height="76" rx="10" fill="#ffffff" stroke="#1f6feb" stroke-width="2"/>
+  <text x="356" y="141" font-size="17" font-weight="bold" fill="#1f2328" text-anchor="middle">商家确认</text>
+  <text x="356" y="165" font-size="12" fill="#57606a" text-anchor="middle">商家单方推进</text>
+  <text x="356" y="99" font-size="12" fill="#1f6feb" text-anchor="middle" font-weight="bold">20</text>
+
+  <!-- 备货完成 -->
+  <line x1="448" y1="148" x2="488" y2="148" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrBlue)"/>
+  <text x="468" y="138" font-size="11" fill="#57606a" text-anchor="middle">备货</text>
+  <rect x="492" y="110" width="180" height="76" rx="10" fill="#ffffff" stroke="#1f6feb" stroke-width="2"/>
+  <text x="582" y="141" font-size="17" font-weight="bold" fill="#1f2328" text-anchor="middle">备货完成</text>
+  <text x="582" y="165" font-size="12" fill="#57606a" text-anchor="middle">商家单方推进</text>
+  <text x="582" y="99" font-size="12" fill="#1f6feb" text-anchor="middle" font-weight="bold">30</text>
+
+  <!-- 开始发货 -->
+  <line x1="674" y1="148" x2="714" y2="148" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrBlue)"/>
+  <text x="694" y="138" font-size="11" fill="#57606a" text-anchor="middle">发货</text>
+  <rect x="718" y="110" width="180" height="76" rx="10" fill="#ffffff" stroke="#1f6feb" stroke-width="2"/>
+  <text x="808" y="141" font-size="17" font-weight="bold" fill="#1f2328" text-anchor="middle">开始发货</text>
+  <text x="808" y="165" font-size="12" fill="#57606a" text-anchor="middle">客户不可再取消</text>
+  <text x="808" y="99" font-size="12" fill="#1f6feb" text-anchor="middle" font-weight="bold">40</text>
+
+  <!-- 交易完成 -->
+  <line x1="900" y1="148" x2="940" y2="148" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrBlue)"/>
+  <text x="920" y="138" font-size="11" fill="#57606a" text-anchor="middle">成交</text>
+  <rect x="944" y="110" width="180" height="76" rx="10" fill="#eef7ee" stroke="#2da44e" stroke-width="2.5"/>
+  <text x="1034" y="141" font-size="17" font-weight="bold" fill="#1a7f37" text-anchor="middle">交易完成</text>
+  <text x="1034" y="165" font-size="12" fill="#57606a" text-anchor="middle">终态 · 不再扣库存</text>
+  <text x="1034" y="99" font-size="12" fill="#1f6feb" text-anchor="middle" font-weight="bold">50</text>
+
+  <!-- 取消路径：备货完成 -> 已取消（蓝虚线） -->
+  <path d="M 560 186 C 560 300, 500 300, 496 386" fill="none" stroke="#1f6feb" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrBlue)"/>
+  <!-- 取消路径：开始发货 -> 已取消（橙实线） -->
+  <path d="M 800 186 C 800 320, 620 320, 596 386" fill="none" stroke="#e07b00" stroke-width="2" marker-end="url(#arrOrange)"/>
+
+  <!-- 已取消 -->
+  <rect x="390" y="390" width="200" height="76" rx="10" fill="#fff5f5" stroke="#cf222e" stroke-width="2.5"/>
+  <text x="490" y="421" font-size="17" font-weight="bold" fill="#a40e26" text-anchor="middle">已取消</text>
+  <text x="490" y="445" font-size="12" fill="#57606a" text-anchor="middle">终态 · 按明细回补库存</text>
+  <text x="490" y="379" font-size="12" fill="#cf222e" text-anchor="middle" font-weight="bold">90</text>
+
+  <!-- 图例 -->
+  <line x1="640" y1="410" x2="690" y2="410" stroke="#1f6feb" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="700" y="415" font-size="13" fill="#1f2328">客户或商家均可取消：客户下单 / 商家确认 / 备货完成</text>
+  <line x1="640" y1="440" x2="690" y2="440" stroke="#e07b00" stroke-width="2"/>
+  <text x="700" y="445" font-size="13" fill="#1f2328">仅商家可取消：开始发货</text>
+
+  <text x="40" y="512" font-size="13" fill="#57606a">非法操作一律拦截并报错：跳态、回退、重复提交同一状态、客户在发货后取消、对终态订单再操作。</text>
+  <text x="40" y="536" font-size="13" fill="#57606a">说明：一条订单只能沿箭头方向走一次，状态只前进不后退；已取消不区分是客户还是商家取消。</text>
+</svg>
