@@ -2,7 +2,7 @@
   <div class="auth-page">
     <div class="auth-card">
       <h2>买家登录</h2>
-      <p class="tip">登录后即可提交购买意向</p>
+      <p class="tip">登录后即可收藏、加入购物车与下单</p>
       
       <div class="form-item">
         <input v-model="form.username" type="text" placeholder="请输入用户名" />
@@ -30,14 +30,38 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router' // 新增 useRoute
-import { login } from '@/api/buyer'
+import { ElMessage } from 'element-plus'
+import { login, addToCart } from '@/api/buyer'
 import { STORAGE_KEYS } from '@/constants/storageKeys'
+import { readPendingCart, clearPendingCart } from '@/utils/pendingCart'
 
 const router = useRouter()
 const route = useRoute() // 获取当前路由信息
 const form = ref({ username: '', password: '' })
 const loading = ref(false)
 const error = ref('')
+
+/**
+ * 登录后恢复未登录期间的临时加购（B.2-2 组内拟定）
+ * 单条失败不影响其他条目，最后统一清空临时清单
+ * @returns {Promise<number>} 成功恢复到购物车的条数
+ */
+async function restorePendingCart() {
+  const pending = readPendingCart()
+  if (pending.length === 0) return 0
+
+  let restored = 0
+  for (const item of pending) {
+    try {
+      await addToCart(item.productId, item.quantity)
+      restored += 1
+    } catch (e) {
+      /* 商品已下架 / 已删除等情况跳过该条 */
+    }
+  }
+  clearPendingCart()
+  return restored
+}
 
 async function handleLogin() {
   if (!form.value.username || !form.value.password) {
@@ -50,11 +74,19 @@ async function handleLogin() {
     // 调用后端登录接口
     const res = await login(form.value)
     localStorage.setItem(STORAGE_KEYS.BUYER_TOKEN, res.token)
-    
+
+    // 恢复未登录期间的临时加购
+    const restored = await restorePendingCart()
+    if (restored > 0) {
+      ElMessage.success(`已将 ${restored} 件商品恢复到您的购物车`)
+    }
+
     // 登录成功后，如果有 redirect 参数则跳回原页面，否则回首页
     const redirectPath = route.query.redirect
     if (redirectPath) {
       router.push(redirectPath)
+    } else if (restored > 0) {
+      router.push('/buyer/cart')
     } else {
       router.push('/buyer/goods')
     }

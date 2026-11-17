@@ -16,7 +16,8 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresBuyerAuth) {
     const token = localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN)
-    if (!token) return next('/buyer/login')
+    // 带上 redirect，登录后可回到原本要访问的页面（如购物车 / 收藏）
+    if (!token) return next({ path: '/buyer/login', query: { redirect: to.fullPath } })
   }
   next()
 })

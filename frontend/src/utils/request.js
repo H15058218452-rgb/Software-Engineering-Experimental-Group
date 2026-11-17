@@ -48,13 +48,14 @@ request.interceptors.response.use(
 
     return Promise.reject({
       code,
-      message: message || ERROR_MESSAGE[code] || '请求失败'
+      message: message || ERROR_MESSAGE[code] || '请求失败',
+      data // 透出业务数据（如 40924 的 shortage 缺货清单），供页面标红使用
     })
   },
   err => {
     const code = err?.response?.data?.code ?? 50000
     const msg = err?.response?.data?.message || ERROR_MESSAGE[code] || '网络请求失败，请检查网络后重试'
-    return Promise.reject({ code, message: msg })
+    return Promise.reject({ code, message: msg, data: err?.response?.data?.data })
   }
 )
 

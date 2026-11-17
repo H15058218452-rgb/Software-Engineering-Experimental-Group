@@ -1,21 +1,7 @@
 <template>
   <div class="orders-page">
-    <!-- 主头部 -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <img :src="logoImg" alt="ShopMall" @click="router.push('/buyer/goods')" />
-        </div>
-        <nav class="nav">
-          <router-link to="/buyer/goods" class="nav-item">首页</router-link>
-          <router-link to="/buyer/orders" class="nav-item active">我的订单</router-link>
-        </nav>
-        <div class="user-actions">
-          <el-button link type="danger" @click="handleLogout">退出登录</el-button>
-          <router-link to="/seller/login" class="seller-entry">卖家入口</router-link>
-        </div>
-      </div>
-    </header>
+    <!-- 主头部（公共组件） -->
+    <BuyerHeader />
 
     <!-- 面包屑 -->
     <div class="breadcrumb">
@@ -27,40 +13,86 @@
     <!-- 主体 -->
     <main class="main">
       <div class="orders-card">
-        <h2 class="page-title">历史下单记录</h2>
-        
+        <div class="title-row">
+          <h2 class="page-title">我的订单</h2>
+          <span class="page-tip">按下单时间倒序，含已取消订单</span>
+        </div>
+
         <div v-if="loading" class="state">加载中...</div>
+
         <div v-else-if="orderList.length === 0" class="state empty">
-          <el-empty description="您还没有任何下单记录" />
+          <el-empty description="您还没有任何订单" />
           <el-button type="danger" @click="router.push('/buyer/goods')">去逛逛</el-button>
         </div>
 
         <template v-else>
           <el-table :data="orderList" style="width: 100%" stripe>
-            <el-table-column prop="productName" label="商品名称" min-width="200">
+            <!-- 展开行即明细：不做独立订单详情页路由 -->
+            <el-table-column type="expand">
               <template #default="{ row }">
-                <span class="product-name">{{ row.productName || '商品已删除' }}</span>
-              </template>
-            </el-table-column>
-            
-            <el-table-column prop="createTime" label="下单时间" width="200">
-              <template #default="{ row }">
-                {{ formatTime(row.createTime || row.queuedAt) }}
+                <div class="detail-wrap">
+                  <div class="detail-head">订单 {{ row.orderNo }} 商品明细</div>
+                  <el-table :data="row.items || []" size="small" border style="width: 100%">
+                    <el-table-column prop="name" label="商品名称" min-width="220" />
+                    <el-table-column prop="price" label="单价" width="120" align="right">
+                      <template #default="{ row: item }">{{ formatMoney(item.price) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="quantity" label="数量" width="90" align="center" />
+                    <el-table-column prop="subtotal" label="小计" width="120" align="right">
+                      <template #default="{ row: item }">{{ formatMoney(item.subtotal) }}</template>
+                    </el-table-column>
+                  </el-table>
+                </div>
               </template>
             </el-table-column>
 
-            <el-table-column label="交易结果" width="150" align="center">
+            <el-table-column prop="orderNo" label="订单号" width="170" />
+
+            <el-table-column label="下单时间" width="180">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status !== undefined ? row.status : row.intentStatus)">
-                  {{ getStatusText(row.status !== undefined ? row.status : row.intentStatus) }}
+                {{ formatTime(row.createdAt || row.createTime) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column label="商品" min-width="200">
+              <template #default="{ row }">
+                <span class="goods-summary">{{ summaryText(row) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="总金额" width="130" align="right">
+              <template #default="{ row }">
+                <span class="amount">{{ formatMoney(row.totalAmount) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="当前状态" width="120" align="center">
+              <template #default="{ row }">
+                <!-- statusText 由后端下发，直接展示，不自己映射码值 -->
+                <el-tag :type="orderStatusTagType(row.status)">
+                  {{ row.statusText || ORDER_STATUS_TEXT[row.status] || '-' }}
                 </el-tag>
               </template>
             </el-table-column>
 
-            <el-table-column label="交易时间" width="200">
+            <el-table-column label="最终结果" width="110" align="center">
               <template #default="{ row }">
-                <!-- 只有成功或失败才有交易时间 -->
-                {{ row.dealTime || row.updateTime ? formatTime(row.dealTime || row.updateTime) : '-' }}
+                {{ finalResultText(row.finalResult) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column label="操作" width="110" align="center">
+              <template #default="{ row }">
+                <!-- 客户可在 10 / 20 / 30 取消；「开始发货」及以后隐藏取消按钮 -->
+                <el-button
+                  v-if="isCustomerCancellable(row.status)"
+                  link
+                  type="danger"
+                  @click="handleCancel(row)"
+                >
+                  取消订单
+                </el-button>
+                <span v-else class="op-none">-</span>
               </template>
             </el-table-column>
           </el-table>
@@ -71,7 +103,7 @@
               background
               layout="prev, pager, next"
               :total="total"
-              :page-size="queryParams.pageSize"
+              :page-size="queryParams.size"
               :current-page="queryParams.page"
               @current-change="handlePageChange"
             />
@@ -92,11 +124,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { getMyOrders } from '@/api/buyer'
-import { STORAGE_KEYS } from '@/constants/storageKeys'
-import { formatTime } from '@/utils/format'
-import logoImg from '@/assets/logo.png'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getMyOrderList, cancelOrder } from '@/api/buyer'
+import { formatMoney, formatTime } from '@/utils/format'
+import {
+  ORDER_STATUS_TEXT,
+  isCustomerCancellable,
+  orderStatusTagType,
+  finalResultText
+} from '@/constants/orderStatus'
+import BuyerHeader from '@/components/BuyerHeader.vue'
 
 const router = useRouter()
 
@@ -106,40 +143,57 @@ const total = ref(0)
 
 const queryParams = ref({
   page: 1,
-  pageSize: 10
+  size: 10 // 列表每页 10 条
 })
 
-// 状态映射 (兼容后端返回的 status 或 intentStatus)
-function getStatusText(status) {
-  const map = {
-    0: '待交易', // 排队中
-    1: '待交易', // 交易中
-    2: '交易成功',
-    3: '交易失败', // 已作废
-    4: '已取消',   // 已撤销
-    5: '待交易',   // 重新排队
-    6: '交易失败'  // 最终失败
-  }
-  return map[status] || '未知'
-}
-
-function getStatusType(status) {
-  if (status === 2) return 'success'
-  if (status === 3 || status === 6) return 'danger'
-  if (status === 4) return 'info'
-  return 'warning' // 0, 1, 5 都是 warning (待交易)
+// 商品摘要：首件商品名 + 其余件数，明细在展开行里看
+function summaryText(row) {
+  const items = row.items || []
+  if (items.length === 0) return `${row.itemCount ?? 0} 件商品`
+  const first = items[0]?.name || '商品'
+  const count = row.itemCount ?? items.length
+  return count > 1 ? `${first} 等 ${count} 件商品` : first
 }
 
 async function loadOrders() {
   loading.value = true
   try {
-    const res = await getMyOrders(queryParams.value)
-    orderList.value = res.list || []
-    total.value = res.total || 0
+    const res = await getMyOrderList(queryParams.value)
+    orderList.value = res?.list || []
+    total.value = res?.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '获取订单记录失败')
+    ElMessage.error(e.message || '获取订单列表失败')
+    orderList.value = []
+    total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+// 取消订单：即时生效，无对方确认与审批；前端仅做一次防误触提示
+async function handleCancel(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定取消订单 ${row.orderNo} 吗？取消后订单立即进入「已取消」终态，库存将自动回补，且不可撤销。`,
+      '取消订单',
+      { confirmButtonText: '确定取消', cancelButtonText: '再想想', type: 'warning' }
+    )
+  } catch (e) {
+    return // 用户放弃
+  }
+
+  try {
+    await cancelOrder(row.orderNo)
+    ElMessage.success('订单已取消，库存已回补')
+    await loadOrders()
+  } catch (e) {
+    // 40921 时机不符 / 40923 已终态：状态已被变更，提示后刷新列表
+    if (e.code === 40921 || e.code === 40923) {
+      ElMessage.warning(`${e.message}，已为您刷新订单状态`)
+      await loadOrders()
+    } else {
+      ElMessage.error(e.message || '取消失败，请重试')
+    }
   }
 }
 
@@ -147,12 +201,6 @@ function handlePageChange(page) {
   queryParams.value.page = page
   loadOrders()
   window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-function handleLogout() {
-  localStorage.removeItem(STORAGE_KEYS.BUYER_TOKEN)
-  ElMessage.success('已退出登录')
-  router.push('/buyer/login')
 }
 
 onMounted(() => {
@@ -166,19 +214,6 @@ onMounted(() => {
   background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
   color: #333;
 }
-
-/* 头部 */
-.header { background: #fff; }
-.header-inner {
-  max-width: 1200px; margin: 0 auto; height: 80px;
-  display: flex; align-items: center; padding: 0 20px; gap: 24px;
-}
-.logo img { height: 28px; cursor: pointer; }
-.nav { flex: 1; display: flex; gap: 32px; margin-left: 20px; }
-.nav-item { color: #333; text-decoration: none; font-size: 15px; }
-.nav-item:hover, .nav-item.active { color: #e60012; font-weight: bold; }
-.user-actions { display: flex; align-items: center; gap: 15px; font-size: 14px; }
-.seller-entry { color: #999; text-decoration: none; }
 
 /* 面包屑 */
 .breadcrumb {
@@ -197,12 +232,20 @@ onMounted(() => {
 .orders-card {
   background: #fff; padding: 30px 40px; min-height: 500px;
 }
-.page-title { font-size: 20px; margin: 0 0 24px; font-weight: 500; }
+.title-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 24px; }
+.page-title { font-size: 20px; margin: 0; font-weight: 500; }
+.page-tip { font-size: 12px; color: #999; }
 
 .state { text-align: center; padding: 60px 0; color: #999; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 20px; }
 
-.product-name { font-weight: 500; color: #333; }
+.goods-summary { color: #333; }
+.amount { color: #e60012; font-weight: 500; }
+.op-none { color: #ccc; }
+
+/* 展开行：订单明细 */
+.detail-wrap { padding: 16px 20px 20px; background: #fafafa; }
+.detail-head { font-size: 13px; color: #666; margin-bottom: 12px; }
 
 .pagination-wrap { display: flex; justify-content: center; margin-top: 30px; }
 
