@@ -1,0 +1,103 @@
+{
+    "clientName": "Thunder Client",
+    "collectionName": "迭代3-挑战B回归测试",
+    "collectionId": "ebeb3a47-7a0a-4794-a6ae-da74772535af",
+    "dateExported": "2026-11-18T11:59:09.195Z",
+    "version": "1.4",
+    "folders": [],
+    "requests": [
+        {
+            "_id": "056711c2-e063-4637-98ec-ce2db0b146ba",
+            "colId": "ebeb3a47-7a0a-4794-a6ae-da74772535af",
+            "containerId": "",
+            "name": "查看收藏",
+            "url": "http://localhost:8080/api/buyer/favorites",
+            "method": "GET",
+            "sortNum": 10000,
+            "created": "2026-11-18T11:58:27.923Z",
+            "modified": "2026-11-18T11:58:27.923Z",
+            "headers": [
+                {
+                    "name": "Authorization",
+                    "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwicm9sZSI6ImJ1eWVyIiwiaWF0IjoxNzk0OTgwNzUxLCJleHAiOjE3OTUwNjcxNTF9.0NERAiJXBKZFO0vzdbWhRsOhmRTtOlINSkzBvktBhd8"
+                }
+            ],
+            "postReq": {
+                "inlineScripts": [
+                    {
+                        "script": [
+                            "tc.test(\"HTTP Status 200\", function() { tc.expect(tc.response.status).to.equal(200); });",
+                            "tc.test(\"Code is 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "_id": "22ef85db-3de1-4256-884f-7683c3df745f",
+            "colId": "ebeb3a47-7a0a-4794-a6ae-da74772535af",
+            "containerId": "",
+            "name": "查看收藏",
+            "url": "http://localhost:8080/api/buyer/favorites",
+            "method": "GET",
+            "sortNum": 20000,
+            "created": "2026-11-18T11:58:35.931Z",
+            "modified": "2026-11-18T11:58:35.931Z",
+            "headers": [
+                {
+                    "name": "Authorization",
+                    "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwicm9sZSI6ImJ1eWVyIiwiaWF0IjoxNzk0OTgwNzUxLCJleHAiOjE3OTUwNjcxNTF9.0NERAiJXBKZFO0vzdbWhRsOhmRTtOlINSkzBvktBhd8"
+                }
+            ],
+            "postReq": {
+                "inlineScripts": [
+                    {
+                        "script": [
+                            "tc.test(\"HTTP Status 200\", function() { tc.expect(tc.response.status).to.equal(200); });",
+                            "tc.test(\"Code is 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "_id": "232cb4b6-fdc5-4711-bcc9-6ce50487f207",
+            "colId": "ebeb3a47-7a0a-4794-a6ae-da74772535af",
+            "containerId": "",
+            "name": "创建订单",
+            "url": "http://localhost:8080/api/order",
+            "method": "POST",
+            "sortNum": 30000,
+            "created": "2026-11-18T11:58:42.501Z",
+            "modified": "2026-11-18T11:58:42.501Z",
+            "headers": [
+                {
+                    "name": "Authorization",
+                    "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwicm9sZSI6ImJ1eWVyIiwiaWF0IjoxNzk0OTgwNzUxLCJleHAiOjE3OTUwNjcxNTF9.0NERAiJXBKZFO0vzdbWhRsOhmRTtOlINSkzBvktBhd8"
+                }
+            ],
+            "body": {
+                "type": "json",
+                "raw": [
+                    "{",
+                    "  \"items\": [",
+                    "    { \"productId\": \"3\", \"quantity\": 1 }",
+                    "  ]",
+                    "}"
+                ],
+                "form": []
+            },
+            "postReq": {
+                "inlineScripts": [
+                    {
+                        "script": [
+                            "tc.test(\"HTTP Status 200\", function() { tc.expect(tc.response.status).to.equal(200); });",
+                            "tc.test(\"Code is 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "ref": "MvYJircZ9aKTyg9br3eNxnJVF5nnazm7U8g-_MzCxRb3BFPWZx99ccN9qdQ0Ci_mtvq1C9sqINk8TbieASvHQg"
+}
