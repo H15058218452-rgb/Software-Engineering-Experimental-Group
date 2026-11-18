@@ -67,15 +67,12 @@ export async function updateStock(productId, newStock, oldStock) {
   return success(normalizeProduct(result), '库存修改成功')
 }
 
-// 6. 商品操作（冻结、解冻、开始交易、确认成交/失败、下架、上架）
+// 6. 商品操作（B.1-5 商品状态只有两态：在售 / 已下架）
+//    冻结、解冻、开始交易、确认成交/失败属于迭代 2 的「意向 + 队列 + 交易冻结」模型，
+//    B 中意向机制已下线，这里不再提供这些动作。
 const actionEndpoints = {
-  freeze: '/product/freeze',
-  unfreeze: '/product/unfreeze',
-  'start-trade': '/product/start-trade',
-  'confirm-sold': '/product/confirm-sold',
-  'confirm-failed': '/product/confirm-failed',
   'off-shelf': '/product/off-shelf',
-  'shelf-on': '/product/shelf-on' // 👈 补充：重新上架接口
+  'shelf-on': '/product/shelf-on'
 }
 
 export async function operateProduct(action, data = {}) {
@@ -87,20 +84,11 @@ export async function operateProduct(action, data = {}) {
     requestId: genRequestId()
   }
 
-  if (action === 'confirm-sold' || action === 'confirm-failed') {
-    if (data.intentId == null) throw { code: 40001, message: '需要提供意向 ID' }
-    payload.intentId = Number(data.intentId)
-    if (action === 'confirm-failed') {
-      if (!['VOID', 'REQUEUE'].includes(data.disposition)) throw { code: 40001, message: '请指定处置方式' }
-      payload.disposition = data.disposition
-    }
-  }
-
   const result = await request.post(endpoint, payload)
   return success(normalizeProduct(result), '操作成功')
 }
 
-// 7. 获取意向列表
+// 7. 意向列表：B 中购买意向已下线，前端不再提供入口，仅保留历史留档页使用
 export async function getIntentList(productId) {
   const result = await request.get('/seller/intents', { params: { productId: String(productId) } })
   const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
@@ -130,39 +118,53 @@ export async function getCustomerList(params) {
   return success(result)
 }
 
-// 11. 获取客户历史订单（后端路径是 /intents）
+// 11. 该客户的历史意向（迭代 2 遗留，B 中已下线，仅只读留档；后端路径是 /intents）
 export async function getCustomerHistory(customerId) {
   const result = await request.get(`/seller/customers/${customerId}/intents`)
   return success(result)
 }
 
 // 12. 订单管理（挑战需求 B.1）
-// 订单状态：0 客户下单 / 1 商家确认 / 2 备货完成 / 3 开始发货 / 4 交易完成 / 5 已取消
-// 说明：后端订单接口尚未实现，前端 OrderList.vue 目前使用模拟数据演示；
-// 后端接口就位后，在这里补上真实调用（预计路径见下方注释）。
-export async function getOrderList(params) {
-  const result = await request.get('/seller/orders', { params })
-  const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
-  return success({ list, total: result?.total || list.length })
+// 订单状态码（后端 enums/OrderStatus）：10 客户下单 / 20 商家确认 / 30 备货完成 / 40 开始发货 / 50 交易完成 / 90 已取消
+//
+// 后端只有 9 个订单端点，没有「卖家全局订单列表」：
+//   B.1-4 已裁定 —— 商家不设全局订单列表、不按状态筛选，只能从客户进入，看该客户的订单记录。
+//   因此这里按客户查：GET /seller/customer/{customerId}/order（SellerOrderController）
+export async function getCustomerOrderList(customerId, params = {}) {
+  const result = await request.get(`/seller/customer/${encodeURIComponent(customerId)}/order`, {
+    params: {
+      page: Number(params.page) || 1,
+      size: Number(params.size) || 10
+    }
+  })
+  const list = Array.isArray(result) ? result : (result?.list ?? [])
+  return success({
+    list,
+    total: Number(result?.total ?? list.length),
+    page: Number(result?.page ?? params.page ?? 1),
+    size: Number(result?.size ?? params.size ?? 10)
+  })
 }
 
-// 订单状态流转：action = confirm(商家确认) / stocked(备货完成) / ship(开始发货) / complete(交易完成)
-export async function advanceOrder(orderId, action) {
-  const endpoints = {
-    confirm: '/seller/orders/confirm',
-    stocked: '/seller/orders/stocked',
-    ship: '/seller/orders/ship',
-    complete: '/seller/orders/complete'
-  }
-  const endpoint = endpoints[action]
-  if (!endpoint) throw { code: 40001, message: `不支持的订单操作：${action}` }
-  const result = await request.post(endpoint, { orderId: Number(orderId), requestId: genRequestId() })
+// 状态推进（仅商家）：10→20 confirm、20→30 ready、30→40 ship、40→50 complete
+// 跳态 / 回退 / 重复提交 → 40921；50、90 终态 → 40923；非卖家 → 40301/40101
+const ORDER_ACTION_PATHS = {
+  confirm: 'confirm',
+  ready: 'ready',
+  ship: 'ship',
+  complete: 'complete'
+}
+
+export async function advanceOrder(orderNo, action) {
+  const path = ORDER_ACTION_PATHS[action]
+  if (!path) throw { code: 40001, message: `不支持的订单操作：${action}` }
+  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/${path}`)
   return success(result, '操作成功')
 }
 
-// 商家取消订单（交易完成前可取消）
-export async function cancelOrder(orderId) {
-  const result = await request.post('/seller/orders/cancel', { orderId: Number(orderId), requestId: genRequestId() })
+// 商家取消订单：10 / 20 / 30 / 40 可取消（50 之后隐藏按钮）；取消后同事务回补库存
+export async function cancelOrder(orderNo) {
+  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/cancel`)
   return success(result, '订单已取消')
 }
 
@@ -182,7 +184,28 @@ export async function getHistoryIntents(productId) {
   return success(list)
 }
 
-// 兼容旧代码空壳
-export function updateGoods() { return Promise.reject({ code: 40001, message: '暂不支持编辑' }) }
-export function getGoodsDetail() { return Promise.reject({ code: 40001, message: '暂无详情接口' }) }
-export const publishGoods = publishProduct;
+// 14. 商品详情（编辑页回填）：GET /seller/products/{id} → SellerProductView
+export async function getGoodsDetail(productId) {
+  const result = await request.get(`/seller/products/${encodeURIComponent(productId)}`)
+  return success(normalizeProduct(result))
+}
+
+// 14. 编辑商品：POST /product/update
+//     后端 UpdateRequest 只收 名称/类别/描述/价格/图集，库存不在这里改（走 stock-adjust）
+export async function updateGoods(productId, data) {
+  const imageArr = data.images || (data.image ? [data.image] : [])
+
+  const payload = {
+    productId: Number(productId),
+    name: data.name?.trim(),
+    description: data.description?.trim() || null,
+    price: Number(data.price),
+    categoryId: data.categoryId,
+    images: imageArr,
+    requestId: genRequestId()
+  }
+  const result = await request.post('/product/update', payload)
+  return success(normalizeProduct(result), '保存成功')
+}
+
+export const publishGoods = publishProduct

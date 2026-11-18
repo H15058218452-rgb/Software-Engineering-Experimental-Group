@@ -30,11 +30,13 @@
       </el-table-column>
 
       <el-table-column label="下架时间" width="170" align="center">
-        <template #default="{ row }">{{ formatTime(row.offShelfAt) }}</template>
+        <template #default="{ row }">{{ formatTime(row.offShelfTime) }}</template>
       </el-table-column>
 
-      <el-table-column label="操作" width="140" align="center">
+      <el-table-column label="操作" width="200" align="center">
         <template #default="{ row }">
+          <!-- 已下架商品的重新上架入口只在历史管理里（商品管理只列在售） -->
+          <el-button v-if="row.stock > 0" type="success" link @click="shelfOn(row)">重新上架</el-button>
           <el-button type="primary" link @click="openIntents(row)">查看历史意向</el-button>
         </template>
       </el-table-column>
@@ -47,7 +49,7 @@
       <el-button :disabled="page >= totalPages" @click="page++; load()">下一页</el-button>
     </div>
 
-    <!-- 历史意向弹窗 -->
+    <!-- 历史意向弹窗：迭代 2 的购买意向在 B 中已下线，这里只读查看，不再参与流转 -->
     <el-dialog v-model="dialogVisible" :title="`${currentProduct?.name || '商品'} 的历史意向`" width="600px">
       <el-table :data="intentList" border v-loading="intentLoading">
         <el-table-column label="姓名" min-width="100" align="center">
@@ -71,28 +73,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-
-// ===== 模拟数据（后端接口就位后，替换为真实 API 调用）=====
-const MOCK_PRODUCTS = [
-  { id: 1, name: '无线蓝牙耳机', imageUrl: '', price: '199.00', stock: 0, statusText: '已下架', offShelfAt: '2026-11-10 18:20:00' },
-  { id: 2, name: '机械键盘', imageUrl: '', price: '299.00', stock: 0, statusText: '已下架', offShelfAt: '2026-11-09 15:10:00' }
-]
-const MOCK_INTENTS = {
-  1: [
-    { id: 101, name: '张三', phone: '13800000001', createdAt: '2026-11-08 10:00:00', status: 2, statusText: '交易成功' },
-    { id: 102, name: '李四', phone: '13800000002', createdAt: '2026-11-09 11:30:00', status: 3, statusText: '已作废' }
-  ],
-  2: [
-    { id: 201, name: '王五', phone: '13800000003', createdAt: '2026-11-07 09:20:00', status: 6, statusText: '最终失败' }
-  ]
-}
+import { getHistoryProducts, getHistoryIntents, operateProduct } from '@/api/seller'
 
 const list = ref([])
 const page = ref(1)
 const size = 10
-const totalPages = ref(1)
+const total = ref(0)
 const loading = ref(false)
 
 const dialogVisible = ref(false)
@@ -100,6 +88,9 @@ const currentProduct = ref(null)
 const intentList = ref([])
 const intentLoading = ref(false)
 
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
+
+// 迭代 2 意向状态：0 排队中 / 1 交易中 / 2 交易成功 / 3 已作废 / 4 已撤销 / 5 重新排队 / 6 最终失败
 const statusText = (s) => {
   const map = {
     0: '排队中', 1: '交易中', 2: '交易成功',
@@ -118,26 +109,45 @@ const formatTime = (timeStr) => {
   return String(timeStr).substring(0, 19).replace('T', ' ')
 }
 
-const load = () => {
+// 已下架商品历史：GET /seller/history/products（只读）
+const load = async () => {
   loading.value = true
   try {
-    // 模拟：前端分页
-    const data = [...MOCK_PRODUCTS]
-    totalPages.value = Math.max(1, Math.ceil(data.length / size))
-    const start = (page.value - 1) * size
-    list.value = data.slice(start, start + size)
+    const res = await getHistoryProducts({ page: page.value, pageSize: size })
+    if (res.code === 0) {
+      list.value = res.data.list || []
+      total.value = Number(res.data.total || 0)
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '获取历史商品失败')
+    list.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
-const openIntents = (row) => {
+// 重新上架：已下架且库存 > 0 才能上架，上架后商品从历史列表消失、回到商品管理
+const shelfOn = async (row) => {
+  try {
+    await operateProduct('shelf-on', { productId: row.id })
+    ElMessage.success('已重新上架')
+    load()
+  } catch (e) {
+    ElMessage.error(e.message || '上架失败')
+  }
+}
+
+const openIntents = async (row) => {
   currentProduct.value = row
   dialogVisible.value = true
+  intentList.value = []
   intentLoading.value = true
   try {
-    // 模拟：读取该商品的历史意向
-    intentList.value = MOCK_INTENTS[row.id] || []
+    const res = await getHistoryIntents(row.id)
+    if (res.code === 0) intentList.value = Array.isArray(res.data) ? res.data : (res.data.list || [])
+  } catch (e) {
+    ElMessage.error(e.message || '获取历史意向失败')
   } finally {
     intentLoading.value = false
   }
