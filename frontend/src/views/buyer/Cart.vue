@@ -183,10 +183,11 @@ async function loadCart() {
 }
 
 // 修改数量：成功后本地重算小计，失败回滚到服务端数据
+// ⚠️ 后端购物车条目以 productId 定位（不是 cartId）
 async function handleQuantityChange(item) {
   const target = Number(item.quantity)
   try {
-    await updateCartQuantity(item.cartId, target)
+    await updateCartQuantity(item.productId, target)
     item.subtotal = (Number(item.price || 0) * target).toFixed(2)
   } catch (e) {
     ElMessage.error(e.message || '修改数量失败')
@@ -194,10 +195,10 @@ async function handleQuantityChange(item) {
   }
 }
 
-// 移除单条
+// 移除单条（后端以 productId 定位）
 async function handleRemove(item) {
   try {
-    await removeCartItem(item.cartId)
+    await removeCartItem(item.productId)
     ElMessage.success('已移除该商品')
     await loadCart()
   } catch (e) {
@@ -205,9 +206,9 @@ async function handleRemove(item) {
   }
 }
 
-// 批量转收藏（B.2-4）
+// 批量转收藏（B.2-4）：后端按商品ID处理
 async function handleToFavorite() {
-  const ids = checkedList.value.map(item => item.cartId)
+  const ids = checkedList.value.map(item => item.productId)
   if (ids.length === 0) return ElMessage.warning('请先勾选要转收藏的商品')
 
   try {
@@ -235,9 +236,9 @@ async function handleToFavorite() {
   }
 }
 
-// 结算下单（B.2-3）：统一走 /api/cart/checkout，不直接调 /api/order
+// 结算下单（B.2-3）：api 层内部走「库存校验 → 建单 → 出车」三步，入参为商品ID
 async function handleCheckout() {
-  const ids = checkedList.value.map(item => item.cartId)
+  const ids = checkedList.value.map(item => item.productId)
   if (ids.length === 0) return ElMessage.warning('请先勾选要结算的商品')
   if (submitting.value) return
 
