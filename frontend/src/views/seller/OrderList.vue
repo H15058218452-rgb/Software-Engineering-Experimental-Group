@@ -1,150 +1,319 @@
 <template>
   <div class="wrap">
     <div class="bar">
-      <h3>订单管理</h3>
-      <div>
-        <el-select v-model="status" placeholder="全部状态" clearable style="width: 140px; margin-right: 10px;" @change="loadData">
-          <el-option label="客户下单" :value="0" />
-          <el-option label="商家确认" :value="1" />
-          <el-option label="备货完成" :value="2" />
-          <el-option label="开始发货" :value="3" />
-          <el-option label="交易完成" :value="4" />
-          <el-option label="已取消" :value="5" />
+      <h3>客户订单</h3>
+      <div class="bar-right">
+        <el-select
+          v-model="customerId"
+          filterable
+          placeholder="选择客户查看其订单"
+          style="width: 200px; margin-right: 10px;"
+          @change="handleCustomerChange"
+        >
+          <el-option
+            v-for="c in customers"
+            :key="c.id"
+            :label="customerLabel(c)"
+            :value="String(c.id)"
+          />
         </el-select>
-        <el-button type="primary" @click="loadData">刷新列表</el-button>
+        <el-button type="primary" :disabled="!customerId" @click="loadOrders">刷新列表</el-button>
+        <el-button @click="$router.push('/seller/customers')">去客户管理</el-button>
       </div>
     </div>
 
-    <el-table :data="list" style="width: 100%" border v-loading="loading">
-      <el-table-column prop="orderNo" label="订单号" width="180" align="center">
-        <template #default="{ row }">{{ row.orderNo || row.id }}</template>
-      </el-table-column>
+    <!-- B.1-4 裁定：商家不设全局订单列表、不按状态筛选，只能从客户进入看该客户的订单 -->
+    <el-alert
+      v-if="!customerId"
+      type="info"
+      :closable="false"
+      show-icon
+      title="请先在「客户管理」点某位客户的「查看订单」进入"
+      description="卖家订单按客户查看：选中客户后展示其全部订单（含已取消），并可在此处推进状态或取消订单。"
+    />
 
-      <el-table-column label="客户" min-width="120" align="center">
-        <template #default="{ row }">{{ row.buyerName || row.username || '-' }}</template>
-      </el-table-column>
+    <template v-else>
+      <div class="customer-line">
+        <span class="customer-name">{{ currentCustomerLabel }}</span>
+        <span class="customer-tip">共 {{ total }} 笔订单，按下单时间倒序</span>
+      </div>
 
-      <el-table-column label="商品名称" min-width="150" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.productName || '-' }}</template>
-      </el-table-column>
+      <el-table :data="list" style="width: 100%" border v-loading="loading">
+        <!-- 展开行即明细：需求不做独立订单详情页路由 -->
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="detail-wrap">
+              <div class="detail-head">订单 {{ row.orderNo }} 商品明细</div>
+              <el-table :data="row.items || []" size="small" border style="width: 100%">
+                <el-table-column prop="name" label="商品名称" min-width="200" />
+                <el-table-column label="单价" width="110" align="right">
+                  <template #default="{ row: item }">¥{{ item.price }}</template>
+                </el-table-column>
+                <el-table-column prop="quantity" label="数量" width="80" align="center" />
+                <el-table-column label="小计" width="110" align="right">
+                  <template #default="{ row: item }">¥{{ item.subtotal }}</template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
 
-      <el-table-column label="金额" width="100" align="center">
-        <template #default="{ row }">¥{{ row.amount ?? row.price ?? '-' }}</template>
-      </el-table-column>
+        <el-table-column prop="orderNo" label="订单号" width="160" align="center" />
 
-      <el-table-column label="下单时间" width="170" align="center">
-        <template #default="{ row }">{{ formatTime(row.createdAt || row.createTime) }}</template>
-      </el-table-column>
+        <el-table-column label="下单时间" width="170" align="center">
+          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+        </el-table-column>
 
-      <el-table-column label="订单状态" width="110" align="center">
-        <template #default="{ row }">
-          <el-tag size="small" :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
+        <el-table-column label="商品" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ summaryText(row) }}</template>
+        </el-table-column>
 
-      <el-table-column label="操作" width="220" align="center">
-        <template #default="{ row }">
-          <div class="actions">
-            <el-button v-if="row.status === 0" size="small" type="success" @click="advance(row, 'confirm')">商家确认</el-button>
-            <el-button v-if="row.status === 1" size="small" type="success" @click="advance(row, 'stocked')">备货完成</el-button>
-            <el-button v-if="row.status === 2" size="small" type="success" @click="advance(row, 'ship')">开始发货</el-button>
-            <el-button v-if="row.status === 3" size="small" type="success" @click="advance(row, 'complete')">交易完成</el-button>
-            <!-- 交易完成(4)前商家可取消订单 -->
-            <el-button v-if="row.status != null && row.status >= 0 && row.status <= 3" size="small" type="danger" @click="cancel(row)">取消订单</el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+        <el-table-column label="总金额" width="110" align="right">
+          <template #default="{ row }">
+            <span class="amount">¥{{ row.totalAmount }}</span>
+          </template>
+        </el-table-column>
 
-    <div class="pager">
-      <el-button :disabled="page <= 1" @click="page--; loadData()">上一页</el-button>
-      <span style="margin: 0 10px;">{{ page }} / {{ totalPages }}</span>
-      <el-button :disabled="page >= totalPages" @click="page++; loadData()">下一页</el-button>
-    </div>
+        <el-table-column label="当前状态" width="120" align="center">
+          <template #default="{ row }">
+            <!-- 口径以《订单状态流转》为准：优先用本地码值映射，
+                 后端 statusText 目前是「商家已确认」「已发货」，与口径不符 -->
+            <el-tag size="small" :type="orderStatusTagType(row.status)">
+              {{ ORDER_STATUS_TEXT[row.status] || row.statusText || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="最终结果" width="110" align="center">
+          <template #default="{ row }">{{ finalResultText(row.finalResult) }}</template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="260" align="center">
+          <template #default="{ row }">
+            <div class="actions">
+              <!-- 推进按钮按状态显示：confirm 仅 10、ready 仅 20、ship 仅 30、complete 仅 40 -->
+              <el-button
+                v-if="row.status === ORDER_STATUS.PENDING"
+                size="small"
+                type="success"
+                @click="handleAdvance(row, 'confirm')"
+              >商家确认</el-button>
+              <el-button
+                v-else-if="row.status === ORDER_STATUS.CONFIRMED"
+                size="small"
+                type="success"
+                @click="handleAdvance(row, 'ready')"
+              >备货完成</el-button>
+              <el-button
+                v-else-if="row.status === ORDER_STATUS.READY"
+                size="small"
+                type="success"
+                @click="handleAdvance(row, 'ship')"
+              >开始发货</el-button>
+              <el-button
+                v-else-if="row.status === ORDER_STATUS.SHIPPED"
+                size="small"
+                type="success"
+                @click="handleAdvance(row, 'complete')"
+              >交易完成</el-button>
+
+              <!-- 商家可在「交易完成」前取消：10/20/30/40 显示，50/90 隐藏 -->
+              <el-button
+                v-if="isSellerCancellable(row.status)"
+                size="small"
+                type="danger"
+                @click="handleCancel(row)"
+              >取消订单</el-button>
+
+              <span v-if="ORDER_TERMINAL_STATUS.includes(Number(row.status))" class="op-none">已结束</span>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-empty v-if="!loading && list.length === 0" description="该客户暂无订单记录" />
+
+      <div class="pager">
+        <el-button :disabled="page <= 1" @click="page--; loadOrders()">上一页</el-button>
+        <span style="margin: 0 10px;">{{ page }} / {{ totalPages }}</span>
+        <el-button :disabled="page >= totalPages" @click="page++; loadOrders()">下一页</el-button>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getCustomerList, getCustomerOrderList, advanceOrder, cancelOrder } from '@/api/seller'
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_TEXT,
+  ORDER_TERMINAL_STATUS,
+  orderStatusTagType,
+  finalResultText
+} from '@/constants/orderStatus'
 
-// ===== 模拟数据（后端接口就位后，替换为真实 API 调用）=====
-const MOCK_ORDERS = [
-  { id: 1, orderNo: '202611151230450001', buyerName: '张三', productName: '无线蓝牙耳机', amount: '199.00', status: 0, createdAt: '2026-11-15 12:30:45' },
-  { id: 2, orderNo: '202611151235120002', buyerName: '李四', productName: '机械键盘', amount: '299.00', status: 1, createdAt: '2026-11-15 12:35:12' },
-  { id: 3, orderNo: '202611151240330003', buyerName: '王五', productName: '保温杯', amount: '59.90', status: 2, createdAt: '2026-11-15 12:40:33' },
-  { id: 4, orderNo: '202611151245080004', buyerName: '赵六', productName: '运动鞋', amount: '399.00', status: 3, createdAt: '2026-11-15 12:45:08' },
-  { id: 5, orderNo: '202611151250210005', buyerName: '孙七', productName: '蓝牙音箱', amount: '159.00', status: 4, createdAt: '2026-11-15 12:50:21' },
-  { id: 6, orderNo: '202611151255440006', buyerName: '周八', productName: '数据线', amount: '29.90', status: 5, createdAt: '2026-11-15 12:55:44' }
-]
+const route = useRoute()
+const router = useRouter()
 
+const customers = ref([])
+const customerId = ref('')
 const list = ref([])
-const status = ref('')
+const total = ref(0)
 const page = ref(1)
 const size = 10
-const totalPages = ref(1)
 const loading = ref(false)
 
-// 订单状态：0 客户下单 / 1 商家确认 / 2 备货完成 / 3 开始发货 / 4 交易完成 / 5 已取消
-const statusMap = {
-  0: { text: '客户下单', type: 'warning' },
-  1: { text: '商家确认', type: 'primary' },
-  2: { text: '备货完成', type: 'primary' },
-  3: { text: '开始发货', type: 'primary' },
-  4: { text: '交易完成', type: 'success' },
-  5: { text: '已取消', type: 'info' }
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
+
+const customerLabel = (c) => {
+  const name = c.username || c.nickname || `客户 ${c.id}`
+  return c.phone ? `${name}（${c.phone}）` : name
 }
-const getStatusText = (s) => statusMap[s]?.text || '未知'
-const getStatusType = (s) => statusMap[s]?.type || 'info'
+
+const currentCustomerLabel = computed(() => {
+  const hit = customers.value.find(c => String(c.id) === String(customerId.value))
+  return hit ? customerLabel(hit) : `客户 ${customerId.value}`
+})
 
 const formatTime = (timeStr) => {
   if (!timeStr) return '-'
   return String(timeStr).substring(0, 19).replace('T', ' ')
 }
 
-const loadData = () => {
+// 商品摘要：首件商品名 + 总件数，明细在展开行里看
+const summaryText = (row) => {
+  const items = row.items || []
+  if (items.length === 0) return `${row.itemCount ?? 0} 件商品`
+  const first = items[0]?.name || '商品'
+  return (row.itemCount ?? items.length) > 1 ? `${first} 等 ${row.itemCount} 件商品` : first
+}
+
+// 商家可取消：交易完成（50）之前，即 10/20/30/40
+const isSellerCancellable = (status) =>
+  [ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED, ORDER_STATUS.READY, ORDER_STATUS.SHIPPED]
+    .includes(Number(status))
+
+async function loadCustomers() {
+  try {
+    const res = await getCustomerList({ page: 1, pageSize: 50 })
+    if (res.code === 0) customers.value = res.data.list || []
+  } catch (e) {
+    ElMessage.error(e.message || '获取客户列表失败')
+  }
+}
+
+async function loadOrders() {
+  if (!customerId.value) {
+    list.value = []
+    total.value = 0
+    return
+  }
   loading.value = true
   try {
-    // 模拟：按状态筛选 + 前端分页
-    let data = [...MOCK_ORDERS]
-    if (status.value !== '' && status.value != null) {
-      data = data.filter(it => it.status === Number(status.value))
-    }
-    totalPages.value = Math.max(1, Math.ceil(data.length / size))
-    const start = (page.value - 1) * size
-    list.value = data.slice(start, start + size)
+    const res = await getCustomerOrderList(customerId.value, { page: page.value, size })
+    list.value = res.data.list || []
+    total.value = res.data.total || 0
+  } catch (e) {
+    ElMessage.error(e.message || '获取订单列表失败')
+    list.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
-// 商家推进订单状态：confirm -> stocked -> ship -> complete
-const advance = (row, action) => {
-  const next = { confirm: 1, stocked: 2, ship: 3, complete: 4 }[action]
-  row.status = next
-  ElMessage.success('操作成功')
-  loadData()
+const handleCustomerChange = (val) => {
+  page.value = 1
+  // 同步到地址栏，便于刷新后仍停在同一个客户
+  router.replace({ path: '/seller/orders', query: val ? { customerId: val } : {} })
+  loadOrders()
 }
 
-// 商家取消订单（交易完成前可取消）
-const cancel = async (row) => {
+// 商家推进状态：必须按 10→20→30→40→50 顺序，重复提交/跳态后端统一 40921
+async function handleAdvance(row, action) {
+  const label = { confirm: '商家确认', ready: '备货完成', ship: '开始发货', complete: '交易完成' }[action]
   try {
-    await ElMessageBox.confirm(`确定取消订单 ${row.orderNo || row.id} 吗？`, '取消订单', { type: 'warning' })
+    await ElMessageBox.confirm(`确认将订单 ${row.orderNo} 推进到「${label}」吗？`, label, {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
   } catch {
     return
   }
-  row.status = 5
-  ElMessage.success('订单已取消')
-  loadData()
+  try {
+    await advanceOrder(row.orderNo, action)
+    ElMessage.success('操作成功')
+    loadOrders()
+  } catch (e) {
+    // 40921 状态不符 / 40923 已终态：状态已被别人变更，提示后刷新
+    if (e.code === 40921 || e.code === 40923) {
+      ElMessage.warning(`${e.message}，已为您刷新订单状态`)
+      loadOrders()
+    } else {
+      ElMessage.error(e.message || '操作失败')
+    }
+  }
 }
 
-onMounted(() => loadData())
+// 商家取消：即时生效、无对方确认；取消后库存自动回补
+async function handleCancel(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定取消订单 ${row.orderNo} 吗？取消后立即进入「已取消」终态，库存自动回补，且不可撤销。`,
+      '取消订单',
+      { confirmButtonText: '确定取消', cancelButtonText: '再想想', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await cancelOrder(row.orderNo)
+    ElMessage.success('订单已取消，库存已回补')
+    loadOrders()
+  } catch (e) {
+    if (e.code === 40921 || e.code === 40923) {
+      ElMessage.warning(`${e.message}，已为您刷新订单状态`)
+      loadOrders()
+    } else {
+      ElMessage.error(e.message || '取消失败，请重试')
+    }
+  }
+}
+
+watch(
+  () => route.query.customerId,
+  (val) => {
+    const next = val == null ? '' : String(val)
+    if (next === customerId.value) return
+    customerId.value = next
+    page.value = 1
+    loadOrders()
+  }
+)
+
+onMounted(async () => {
+  customerId.value = route.query.customerId ? String(route.query.customerId) : ''
+  await loadCustomers()
+  if (customerId.value) loadOrders()
+})
 </script>
 
 <style scoped>
 .wrap { padding: 20px; background: #f5f7fa; min-height: 100vh; width: 100%; box-sizing: border-box; }
 .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.bar-right { display: flex; align-items: center; }
+.customer-line { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.customer-name { font-size: 15px; font-weight: 600; color: #303133; }
+.customer-tip { font-size: 12px; color: #909399; }
+.amount { color: #c7000b; font-weight: 500; }
+.op-none { color: #c0c4cc; font-size: 13px; }
 .actions { display: flex; gap: 5px; flex-wrap: nowrap; align-items: center; justify-content: center; }
 .actions :deep(.el-button) { padding: 5px 8px; }
+.detail-wrap { padding: 12px 16px 16px; background: #fafafa; }
+.detail-head { font-size: 13px; color: #606266; margin-bottom: 10px; }
 .pager { margin-top: 16px; text-align: center; }
 </style>

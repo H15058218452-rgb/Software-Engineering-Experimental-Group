@@ -38,35 +38,31 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="状态" width="100" align="center">
+      <el-table-column label="状态" width="140" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+          <!-- B.1-5：商品只有「在售 / 已下架」两态，下架原因单独打标签 -->
+          <el-tag size="small" :type="isOnSale(row) ? 'success' : 'info'">{{ isOnSale(row) ? '在售' : '已下架' }}</el-tag>
+          <el-tag v-if="!isOnSale(row) && offShelfReasonText(row.offShelfReason)" size="small" type="warning" style="margin-left: 4px;">
+            {{ offShelfReasonText(row.offShelfReason) }}
+          </el-tag>
         </template>
       </el-table-column>
 
       <!-- ⚠️ 去掉了 fixed="right"，让表格自己正常撑开 -->
-      <el-table-column label="操作" width="290">
+      <el-table-column label="操作" width="230">
         <template #default="{ row }">
           <div class="actions">
-            <template v-if="row.status === 0">
-              <el-button size="small" type="warning" @click="operate(row, 'freeze')">冻结</el-button>
-              <el-button size="small" type="danger" @click="operate(row, 'off-shelf')">下架</el-button>
-              <el-button size="small" type="success" @click="operate(row, 'start-trade')">开始交易</el-button>
-            </template>
-            <template v-else-if="row.status === 1">
-              <el-button size="small" type="success" @click="operate(row, 'unfreeze')">解冻</el-button>
+            <!-- 在售：只能下架，不能删除 -->
+            <template v-if="isOnSale(row)">
               <el-button size="small" type="danger" @click="operate(row, 'off-shelf')">下架</el-button>
             </template>
-            <template v-else-if="row.status === 2">
-              <el-button size="small" type="success" :loading="loading" @click="handleTrade(row, 'confirm-sold')">确认成交</el-button>
-              <el-button size="small" type="danger" :loading="loading" @click="handleTrade(row, 'confirm-failed')">交易失败</el-button>
-            </template>
-            <template v-else-if="row.status === 3 || !row.status">
+            <!-- 已下架：库存 > 0 才能重新上架（B.1-5） -->
+            <template v-else>
               <el-button v-if="row.stock > 0" size="small" type="success" @click="operate(row, 'shelf-on')">重新上架</el-button>
               <el-button v-else size="small" type="info" disabled>库存为0</el-button>
             </template>
-            
-            <el-button size="small" type="primary" @click="goToIntents(row.id)">查看意向</el-button>
+
+            <el-button size="small" type="primary" @click="goToEdit(row)">编辑</el-button>
           </div>
         </template>
       </el-table-column>
@@ -86,34 +82,37 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getProductList, operateProduct, getSellerIntents, updateStock } from '@/api/seller'
+import { ElMessage } from 'element-plus'
+import { getProductList, operateProduct, updateStock } from '@/api/seller'
 
 const router = useRouter()
 const productList = ref([])
 const loading = ref(false)
 
-const stockDialog = reactive({ 
-  visible: false, 
-  productId: '', 
-  stock: 0, 
-  oldStock: 0 
+const stockDialog = reactive({
+  visible: false,
+  productId: '',
+  stock: 0,
+  oldStock: 0
 })
 
-const statusMap = {
-  0: { text: '在售', type: 'success' },
-  1: { text: '手动冻结', type: 'warning' },
-  2: { text: '交易中', type: 'danger' },
-  3: { text: '已下架/售罄', type: 'info' }
-}
-const getStatusText = (status) => statusMap[status]?.text || '未知'
-const getStatusType = (status) => statusMap[status]?.type || 'info'
+// B.1-5：商品状态收敛为两态。后端仍是 0 在售 / 1 手动冻结 / 2 交易中 / 3 已下架，
+// 冻结与交易中属迭代 2 遗留，按 B 口径一律视为「在售」。
+const isOnSale = (row) => Number(row.status) !== 3
+
+// 已下架原因：后端暂未下发 offShelfReason 字段，拿到就展示，拿不到就不显示
+const offShelfReasonText = (reason) => ({
+  SOLD: '已售',
+  SOLD_OUT: '库存耗尽',
+  MANUAL: '手动下架'
+}[reason] || '')
 
 const loadData = async () => {
   loading.value = true
   try {
     const res = await getProductList({ page: 1, pageSize: 100 })
-    if (res.code === 0) productList.value = res.data.list
+    // 商品管理只列在售商品；已下架的统一在「历史管理」里看
+    if (res.code === 0) productList.value = (res.data.list || []).filter(isOnSale)
   } catch (e) {
     ElMessage.error('获取列表失败')
   } finally {
@@ -124,7 +123,7 @@ const loadData = async () => {
 const openStockDialog = (row) => {
   stockDialog.productId = row.id
   stockDialog.stock = row.stock
-  stockDialog.oldStock = row.stock 
+  stockDialog.oldStock = row.stock
   stockDialog.visible = true
 }
 
@@ -143,7 +142,7 @@ const operate = async (row, action) => {
   loading.value = true
   try {
     await operateProduct(action, { productId: row.id })
-    ElMessage.success('操作成功')
+    ElMessage.success(action === 'shelf-on' ? '已重新上架' : '已下架')
     loadData()
   } catch (error) {
     ElMessage.error(error.message || '操作失败')
@@ -152,43 +151,7 @@ const operate = async (row, action) => {
   }
 }
 
-const handleTrade = async (row, action) => {
-  loading.value = true
-  try {
-    let payload = { productId: row.id }
-    
-    const intentRes = await getSellerIntents(row.id)
-    const tradingIntent = (intentRes.data.list || []).find(it => (it.status ?? it.intentStatus) === 1)
-    
-    if (!tradingIntent) throw new Error('未找到正在交易的意向，请刷新页面重试')
-    payload.intentId = tradingIntent.id
-
-    if (action === 'confirm-failed') {
-      try {
-        await ElMessageBox.confirm('请选择交易失败后的处理方式', '交易失败', {
-          distinguishCancelAndClose: true,
-          confirmButtonText: '作废 (VOID)',
-          cancelButtonText: '重新排队 (REQUEUE)',
-          type: 'warning'
-        })
-        payload.disposition = 'VOID'
-      } catch (error) {
-        if (error === 'cancel') payload.disposition = 'REQUEUE'
-        else { loading.value = false; return }
-      }
-    }
-
-    await operateProduct(action, payload)
-    ElMessage.success('交易状态已更新')
-    loadData()
-  } catch (error) {
-    ElMessage.error(error.message || '操作失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const goToIntents = (id) => router.push(`/seller/intents?productId=${id}`)
+const goToEdit = (row) => router.push(`/seller/publish/${row.id}`)
 
 onMounted(() => loadData())
 </script>

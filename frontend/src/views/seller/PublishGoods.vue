@@ -17,7 +17,9 @@
 
       <div class="row">
         <label>库存数量</label>
-        <input v-model.number="form.stock" type="number" min="1" placeholder="请输入库存数量，至少为 1" />
+        <!-- 编辑时库存不可在此修改：后端 update 接口不收库存，库存走列表页的「修改」 -->
+        <input v-model.number="form.stock" type="number" min="1" placeholder="请输入库存数量，至少为 1" :disabled="isEdit" />
+        <div class="tip" v-if="isEdit">库存不在此处修改，请回商品列表点库存列的「修改」调整</div>
       </div>
 
       <!-- ⚠️ 替换为级联选择器 -->
@@ -159,7 +161,7 @@ const onSubmit = async () => {
   if (!/^\d+(\.\d{1,2})?$/.test(priceStr) || Number(priceStr) <= 0) {
     flash('价格必须大于0，且最多两位小数', true); return
   }
-  if (!form.stock || form.stock < 1) { flash('库存必须大于等于1', true); return }
+  if (!isEdit.value && (!form.stock || form.stock < 1)) { flash('库存必须大于等于1', true); return }
   if (!form.categoryId) { flash('请选择商品类别', true); return }
   if (form.images.length === 0) { flash('请至少上传一张商品图片', true); return }
   
@@ -190,10 +192,24 @@ onMounted(async () => {
   } catch (e) { console.error('获取分类失败', e) }
 
   if (!isEdit.value) return
-  const res = await getGoodsDetail(route.params.id)
-  if (res.code === 0) {
-    Object.assign(form, res.data)
-    if (typeof form.images === 'string') form.images = form.images ? [form.images] : []
+  try {
+    const res = await getGoodsDetail(route.params.id)
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      form.name = d.name || ''
+      form.price = d.price == null ? '' : String(d.price)
+      form.stock = d.stock ?? 0
+      // 后端 categoryId 是字符串，级联选择器的 value 是数字，需转一次才能回显
+      form.categoryId = d.categoryId == null || d.categoryId === '' ? '' : Number(d.categoryId)
+      form.description = d.description || ''
+      form.images = Array.isArray(d.images) && d.images.length > 0
+        ? [...d.images]
+        : (d.image ? [d.image] : [])
+    } else {
+      flash('商品详情加载失败', true)
+    }
+  } catch (e) {
+    flash(e.message || '商品详情加载失败', true)
   }
 })
 </script>

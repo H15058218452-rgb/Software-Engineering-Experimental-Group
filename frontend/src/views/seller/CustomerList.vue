@@ -26,11 +26,10 @@
       
       <el-table-column prop="phone" label="电话" width="150" align="center" />
       
-      <!-- 预留默认交易地点（等后端加） -->
+      <!-- 默认交易地点：账号档案字段（buyer.address），仅商家在此可见；订单本身不记交易地点 -->
       <el-table-column label="默认交易地点" min-width="180" align="center">
         <template #default="{ row }">
-          <!-- 后端还没这个字段，暂时显示横杠 -->
-          {{ row.address || row.defaultAddress || '-' }}
+          {{ row.address || '-' }}
         </template>
       </el-table-column>
 
@@ -39,18 +38,20 @@
       </el-table-column>
       
       <!-- 操作列固定在右侧 -->
-      <el-table-column label="操作" width="120" fixed="right" align="center">
+      <el-table-column label="操作" width="190" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button type="primary" link @click="openHistory(row)">查看历史</el-button>
+          <!-- B.1-4：商家从这里进入该客户的订单记录，并在那边推进状态 / 取消 -->
+          <el-button type="primary" link @click="openOrders(row)">查看订单</el-button>
+          <el-button type="primary" link @click="openHistory(row)">历史意向</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 历史记录弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="`${currentCustomer?.username || '客户'} 的购买历史`" width="600px">
+    <!-- 历史意向弹窗：迭代 2 的购买意向在 B 中已下线，这里只读留档，不再参与任何流转 -->
+    <el-dialog v-model="dialogVisible" :title="`${currentCustomer?.username || '客户'} 的历史意向`" width="600px">
       <el-table :data="historyList" border v-loading="historyLoading">
         <el-table-column prop="productName" label="商品名称" min-width="150" />
-        <el-table-column label="下单时间" width="160" align="center">
+        <el-table-column label="提交时间" width="160" align="center">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="交易结果" width="120" align="center">
@@ -58,19 +59,22 @@
             <el-tag :type="getStatusType(row.status)">{{ row.statusText }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="交易时间" width="160" align="center">
-          <template #default="{ row }">{{ formatTime(row.updatedAt || row.queuedAt) }}</template>
+        <el-table-column label="排队时间" width="160" align="center">
+          <template #default="{ row }">{{ formatTime(row.queuedAt) }}</template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!historyLoading && historyList.length === 0" description="该客户暂无购买记录" />
+      <el-empty v-if="!historyLoading && historyList.length === 0" description="该客户暂无历史意向记录" />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getCustomerList, getCustomerHistory } from '@/api/seller'
 import { ElMessage } from 'element-plus'
+
+const router = useRouter()
 
 const list = ref([])
 const loading = ref(false)
@@ -103,6 +107,11 @@ const loadData = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const openOrders = (row) => {
+  // 带 customerId 进入订单页，后端只按客户查，不提供全局订单列表
+  router.push({ path: '/seller/orders', query: { customerId: String(row.id) } })
 }
 
 const openHistory = async (row) => {
