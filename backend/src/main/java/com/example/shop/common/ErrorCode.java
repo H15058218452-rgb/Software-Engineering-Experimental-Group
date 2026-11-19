@@ -28,6 +28,14 @@ public enum ErrorCode {
     STOCK_BELOW_ZERO(40916, "库存不能为负"),
     IMAGES_TOO_MANY(40917, "商品图库最多 9 张"),
     USERNAME_ALREADY_REGISTERED(40919, "用户名已注册"),
+    // ===== 订单域（迭代 3 · 挑战需求 B，契约第六章：40921~40927）=====
+    ORDER_STATUS_DENIED(40921, "订单状态不允许该操作"),
+    ORDER_ACCESS_DENIED(40922, "无权操作该订单"),
+    ORDER_FINALIZED(40923, "订单已是终态"),
+    ORDER_STOCK_NOT_ENOUGH(40924, "部分商品库存不足"),
+    ORDER_EMPTY(40925, "订单商品不能为空"),
+    ORDER_PRODUCT_OFF_SHELF(40926, "商品已下架"),
+    ORDER_NOT_FOUND(40927, "订单不存在"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;

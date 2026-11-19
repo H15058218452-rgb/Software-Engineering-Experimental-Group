@@ -148,7 +148,44 @@ CREATE TABLE IF NOT EXISTS intent (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家意向表（排队队列）';
 
 -- -----------------------------------------------------
--- 6. 种子数据：默认卖家账号
+-- 6. 购物车表 cart（迭代 3 / 需求 B2-1）
+--    设计要点：
+--    - uk_cart_buyer_product 保证同一买家同一商品只有一条，
+--      重复加入购物车由业务层累加 quantity
+--    - selected 标记是否勾选参与结算，列表合计金额只统计勾选项
+--    - quantity >= 1 且不得超过商品库存（业务层校验）
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS cart (
+    id         BIGINT      NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT      NOT NULL COMMENT '所属买家ID',
+    product_id BIGINT      NOT NULL COMMENT '商品ID',
+    quantity   INT         NOT NULL DEFAULT 1 COMMENT '数量，>=1 且不超过库存',
+    selected   TINYINT     NOT NULL DEFAULT 1 COMMENT '1勾选用于结算 0未勾选',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_cart_buyer_product (buyer_id, product_id),
+    KEY idx_cart_buyer (buyer_id, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '购物车表';
+
+-- -----------------------------------------------------
+-- 7. 收藏表 favorite（迭代 3 / 需求 B2-2）
+--    设计要点：
+--    - uk_favorite_buyer_product 保证同一买家同一商品只收藏一次，
+--      重复添加按幂等成功处理
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS favorite (
+    id         BIGINT      NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT      NOT NULL COMMENT '所属买家ID',
+    product_id BIGINT      NOT NULL COMMENT '商品ID',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_favorite_buyer_product (buyer_id, product_id),
+    KEY idx_favorite_buyer (buyer_id, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收藏表';
+
+-- -----------------------------------------------------
+-- 8. 种子数据：默认卖家账号
 --    用户名 seller，密码 seller123456（BCrypt 哈希，与 application.yml 默认配置一致）
 --    INSERT IGNORE 保证幂等；应用启动时也会自动补建该账号
 -- -----------------------------------------------------

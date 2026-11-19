@@ -33,6 +33,8 @@ public class Product {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime offShelfAt;
+    /** 下架原因：SOLD 已售 / SOLD_OUT 库存耗尽 / MANUAL 手动（迭代 3 新增） */
+    private String offShelfReason;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -60,4 +62,6 @@ public class Product {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public LocalDateTime getOffShelfAt() { return offShelfAt; }
     public void setOffShelfAt(LocalDateTime offShelfAt) { this.offShelfAt = offShelfAt; }
+    public String getOffShelfReason() { return offShelfReason; }
+    public void setOffShelfReason(String offShelfReason) { this.offShelfReason = offShelfReason; }
 }

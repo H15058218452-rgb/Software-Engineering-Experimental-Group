@@ -12,9 +12,12 @@
       <aside class="side">
         <router-link to="/seller/goods">商品管理</router-link>
         <router-link to="/seller/publish">发布商品</router-link>
-        <router-link to="/seller/intents">查看意向购买人</router-link>
+        <!-- 👇 B：购买意向机制已下线，不再提供「查看意向购买人」入口 -->
         <!-- 👇 新增这一行 -->
         <router-link to="/seller/customers">客户管理</router-link>
+        <!-- 👇 挑战需求 B：订单按客户查看（从客户管理进入），历史为旧意向只读留档 -->
+        <router-link to="/seller/orders">客户订单</router-link>
+        <router-link to="/seller/history">历史管理</router-link>
         <router-link to="/seller/password">修改密码</router-link>
       </aside>
       <main class="main"><router-view /></main>
