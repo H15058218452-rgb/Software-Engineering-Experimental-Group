@@ -41,7 +41,7 @@
             v-for="item in cartList"
             :key="item.cartId"
             class="cart-row"
-            :class="{ 'row-off': !item.available, 'row-error': item.shortage }"
+            :class="{ 'row-off': !item.available }"
           >
             <span class="col-check">
               <!-- 已下架商品禁用勾选，结算时不可提交 -->
@@ -58,7 +58,6 @@
                 <span class="goods-name" @click="goDetail(item.productId)">{{ item.name }}</span>
                 <span class="tag-row">
                   <el-tag v-if="!item.available" size="small" type="info">已下架</el-tag>
-                  <span v-if="item.shortage" class="shortage-tip">库存不足，请剔除后重新提交</span>
                 </span>
               </span>
             </span>
@@ -94,8 +93,8 @@
             <div class="foot-right">
               <span class="total-label">合计：</span>
               <span class="total-price">{{ formatMoney(checkedAmount) }}</span>
-              <button class="checkout-btn" :disabled="!hasChecked || submitting" @click="handleCheckout">
-                {{ submitting ? '提交中...' : '结算' }}
+              <button class="checkout-btn" :disabled="!hasChecked" @click="handleCheckout">
+                去结算
               </button>
             </div>
           </div>
@@ -120,16 +119,15 @@ import {
   getCartList,
   updateCartQuantity,
   removeCartItem,
-  checkoutCart,
   cartToFavorite
 } from '@/api/buyer'
 import { formatMoney } from '@/utils/format'
+import { STORAGE_KEYS } from '@/constants/storageKeys'
 import BuyerHeader from '@/components/BuyerHeader.vue'
 
 const router = useRouter()
 
 const loading = ref(false)
-const submitting = ref(false)
 const converting = ref(false)
 const cartList = ref([])
 
@@ -171,7 +169,6 @@ async function loadCart() {
       ...item,
       // 默认勾选在售商品，已下架不勾选
       checked: !!item.available,
-      shortage: false,
       subtotal: item.subtotal ?? (Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)
     }))
   } catch (e) {
@@ -236,45 +233,17 @@ async function handleToFavorite() {
   }
 }
 
-// 结算下单（B.2-3）：api 层内部走「库存校验 → 建单 → 出车」三步，入参为商品ID
-async function handleCheckout() {
+// 结算（C.2-02）：先跳「确认订单」页选收货地址，再在下单页完成库存校验 + 建单
+// 勾选的商品ID通过 sessionStorage 传递，刷新下单页也不会丢
+function handleCheckout() {
   const ids = checkedList.value.map(item => item.productId)
   if (ids.length === 0) return ElMessage.warning('请先勾选要结算的商品')
-  if (submitting.value) return
 
-  submitting.value = true
-  try {
-    const res = await checkoutCart(ids)
-    ElMessage.success(`下单成功${res?.orderNo ? `，订单号 ${res.orderNo}` : ''}`)
-    await loadCart()
-    router.push('/buyer/orders')
-  } catch (e) {
-    // 40924：库存不足，按 data.shortage 标红对应商品，提示剔除后重下
-    if (e.code === 40924) {
-      markShortage(e.data?.shortage || [])
-      ElMessage.error('部分商品库存不足，已标红的商品请剔除后重新提交')
-    } else if (e.code === 40926) {
-      ElMessage.error('购物车中含已下架商品，请剔除后重新提交')
-      await loadCart()
-    } else if (e.code === 40933) {
-      ElMessage.warning('请先勾选要结算的商品')
-    } else {
-      ElMessage.error(e.message || '结算失败，请重试')
-      await loadCart()
-    }
-  } finally {
-    submitting.value = false
-  }
-}
-
-// 缺货标红：命中的商品置红并取消勾选，避免重复提交
-function markShortage(shortage) {
-  const shortageIds = shortage.map(s => String(s.productId))
-  cartList.value.forEach(item => {
-    const hit = shortageIds.includes(String(item.productId))
-    item.shortage = hit
-    if (hit) item.checked = false
-  })
+  sessionStorage.setItem(
+    STORAGE_KEYS.PENDING_CHECKOUT,
+    JSON.stringify({ productIds: ids })
+  )
+  router.push('/buyer/checkout')
 }
 
 function goDetail(productId) {
@@ -327,7 +296,6 @@ onMounted(() => {
   padding: 18px 0; border-bottom: 1px solid #f5f5f5; font-size: 14px;
 }
 .cart-row.row-off { color: #bbb; }
-.cart-row.row-error { background: #fff8f8; }
 
 .col-check { width: 32px; flex: 0 0 32px; display: flex; align-items: center; }
 .col-goods { flex: 1; display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -352,7 +320,6 @@ onMounted(() => {
 }
 .goods-name:hover { color: #e60012; }
 .tag-row { display: flex; align-items: center; gap: 10px; }
-.shortage-tip { font-size: 12px; color: #e60012; }
 
 /* 结算栏 */
 .cart-foot {

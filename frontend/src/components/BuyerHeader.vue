@@ -18,6 +18,7 @@
       </nav>
       <div class="user-actions">
         <template v-if="isLoggedIn">
+          <router-link to="/buyer/address" class="addr-entry">收货地址</router-link>
           <span class="welcome">Hi, 用户</span>
           <el-button link type="danger" @click="handleLogout">退出</el-button>
         </template>
@@ -42,12 +43,13 @@ import logoImg from '@/assets/logo.png'
 const route = useRoute()
 const router = useRouter()
 
-// 导航项：首页 / 购物车 / 我的收藏 / 我的订单
+// 导航项：首页 / 购物车 / 我的收藏 / 我的订单 / 我的售后
 const navList = [
   { path: '/buyer/goods', label: '首页' },
   { path: '/buyer/cart', label: '购物车' },
   { path: '/buyer/favorites', label: '我的收藏' },
-  { path: '/buyer/orders', label: '我的订单' }
+  { path: '/buyer/orders', label: '我的订单' },
+  { path: '/buyer/after-sales', label: '我的售后' }
 ]
 
 const isLoggedIn = computed(() => !!localStorage.getItem(STORAGE_KEYS.BUYER_TOKEN))
@@ -55,6 +57,11 @@ const isLoggedIn = computed(() => !!localStorage.getItem(STORAGE_KEYS.BUYER_TOKE
 function isActive(path) {
   // 商品列表与商品详情都归属「首页」
   if (path === '/buyer/goods') return route.path.startsWith('/buyer/goods')
+  // 订单详情 / 支付页归属「我的订单」；售后详情 / 申请页归属「我的售后」
+  if (path === '/buyer/orders') {
+    return route.path.startsWith('/buyer/orders') || route.path.startsWith('/buyer/pay')
+  }
+  if (path === '/buyer/after-sales') return route.path.startsWith('/buyer/after-sale')
   return route.path === path
 }
 
@@ -79,5 +86,7 @@ function handleLogout() {
 .user-actions { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .user-actions a { color: #333; text-decoration: none; }
 .login-btn:hover, .register-btn:hover { color: #e60012; }
+.addr-entry { color: #666 !important; }
+.addr-entry:hover { color: #e60012 !important; }
 .seller-entry { color: #999 !important; margin-left: 10px; }
 </style>
