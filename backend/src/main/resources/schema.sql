@@ -112,3 +112,20 @@ CREATE TABLE IF NOT EXISTS favorite (
     UNIQUE KEY uk_favorite_buyer_product (buyer_id, product_id),
     KEY idx_favorite_buyer (buyer_id, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收藏表';
+
+-- 买家收货地址簿（挑战需求 C2-1）：可维护多条，唯一默认地址由服务层保证
+CREATE TABLE IF NOT EXISTS address (
+    id             BIGINT       NOT NULL AUTO_INCREMENT,
+    buyer_id       BIGINT       NOT NULL COMMENT '所属买家ID',
+    receiver_name  VARCHAR(32)  NOT NULL COMMENT '收货人',
+    receiver_phone VARCHAR(20)  NOT NULL COMMENT '收货人手机号',
+    province       VARCHAR(32)  NOT NULL COMMENT '省',
+    city           VARCHAR(32)  NOT NULL COMMENT '市',
+    district       VARCHAR(32)  NULL     COMMENT '区/县',
+    detail         VARCHAR(200) NOT NULL COMMENT '详细地址',
+    is_default     TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
+    created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_address_buyer (buyer_id, is_default, updated_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家收货地址簿';

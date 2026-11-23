@@ -185,7 +185,31 @@ CREATE TABLE IF NOT EXISTS favorite (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收藏表';
 
 -- -----------------------------------------------------
--- 8. 种子数据：默认卖家账号
+-- 8. 买家收货地址簿 address（迭代 3 / 挑战需求 C2-1）
+--    设计要点：
+--    - 一个买家可维护多条地址，is_default 标记默认地址
+--    - 同一买家任意时刻最多一条默认地址，由业务层「先清零再置一」保证，
+--      因此不建数据库唯一索引（唯一索引无法表达「最多一条为 1」而不误伤多条 0）
+--    - 与 buyer.address（默认交易地点）区分：后者是账号资料，这里是地址簿
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS address (
+    id             BIGINT       NOT NULL AUTO_INCREMENT,
+    buyer_id       BIGINT       NOT NULL COMMENT '所属买家ID',
+    receiver_name  VARCHAR(32)  NOT NULL COMMENT '收货人',
+    receiver_phone VARCHAR(20)  NOT NULL COMMENT '收货人手机号',
+    province       VARCHAR(32)  NOT NULL COMMENT '省',
+    city           VARCHAR(32)  NOT NULL COMMENT '市',
+    district       VARCHAR(32)  NULL     COMMENT '区/县',
+    detail         VARCHAR(200) NOT NULL COMMENT '详细地址',
+    is_default     TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
+    created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_address_buyer (buyer_id, is_default, updated_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家收货地址簿';
+
+-- -----------------------------------------------------
+-- 9. 种子数据：默认卖家账号
 --    用户名 seller，密码 seller123456（BCrypt 哈希，与 application.yml 默认配置一致）
 --    INSERT IGNORE 保证幂等；应用启动时也会自动补建该账号
 -- -----------------------------------------------------
