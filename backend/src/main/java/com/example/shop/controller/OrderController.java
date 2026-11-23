@@ -78,12 +78,23 @@ public class OrderController {
         return ApiResponse.ok(orderService.advance(orderNo, OrderAction.READY));
     }
 
+    /** 发货（C2-2）：卖家填写物流单号，不填则生成模拟顺丰单号。 */
     @PostMapping("/{orderNo}/ship")
-    public ApiResponse<OrderDtos.StatusView> ship(
+    public ApiResponse<OrderDtos.ShipView> ship(
             @PathVariable String orderNo,
+            @RequestBody(required = false) OrderDtos.ShipRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         requireSeller(authorization);
-        return ApiResponse.ok(orderService.advance(orderNo, OrderAction.SHIP));
+        return ApiResponse.ok(orderService.ship(orderNo, request));
+    }
+
+    /** 物流轨迹（C2-2）：买家查自己的订单，卖家可查全部；轨迹由模拟顺丰服务按发货时间推算。 */
+    @GetMapping("/{orderNo}/tracking")
+    public ApiResponse<OrderDtos.TrackingView> tracking(
+            @PathVariable String orderNo,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        Actor actor = resolve(authorization);
+        return ApiResponse.ok(orderService.tracking(orderNo, actor.id(), actor.seller()));
     }
 
     @PostMapping("/{orderNo}/complete")

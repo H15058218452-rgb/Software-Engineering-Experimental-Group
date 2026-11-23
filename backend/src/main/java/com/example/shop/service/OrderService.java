@@ -216,6 +216,109 @@ public class OrderService {
                 OrderStatus.CANCELLED.getText());
     }
 
+    // ============ 发货与物流轨迹（挑战需求 C2-2） ============
+
+    private static final String CARRIER_SF = "SF";
+    private static final String CARRIER_SF_NAME = "顺丰速运";
+
+    /**
+     * 卖家发货并填写物流单号：仅「备货完成」可发货；单号不填时生成模拟顺丰单号。
+     * 单号与状态在同一条 UPDATE 内落库，避免出现已发货却没有单号的中间态。
+     */
+    @Transactional
+    public OrderDtos.ShipView ship(String orderNo, OrderDtos.ShipRequest req) {
+        Order order = lockOrder(orderNo);
+        int current = order.getStatus();
+        if (OrderStatus.isFinal(current)) {
+            throw new BizException(ErrorCode.ORDER_FINALIZED);
+        }
+        int expected = OrderStatus.READY.getCode();
+        if (current != expected) {
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "订单当前状态为「" + OrderStatus.textOf(current) + "」，不能执行「ship」",
+                    new OrderDtos.StatusConflict(current, expected));
+        }
+
+        String trackingNo = normalizeTrackingNo(req == null ? null : req.trackingNo());
+        int to = OrderStatus.SHIPPED.getCode();
+        if (orderMapper.shipWithTracking(orderNo, expected, to, trackingNo, CARRIER_SF) != 1) {
+            Order latest = orderMapper.selectByOrderNo(orderNo);
+            int now = latest == null ? current : latest.getStatus();
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "订单状态已变更，请刷新后重试",
+                    new OrderDtos.StatusConflict(now, expected));
+        }
+        LocalDateTime shippedAt = orderMapper.selectByOrderNo(orderNo).getShippedAt();
+        return new OrderDtos.ShipView(orderNo, to, OrderStatus.textOf(to),
+                CARRIER_SF, trackingNo, TimeUtil.format(shippedAt));
+    }
+
+    /**
+     * 物流轨迹查询：买家只能查自己的订单，卖家可查全部。
+     * 轨迹由「模拟顺丰服务」按发货时间推算，不依赖外部网络，便于离线演示与验收。
+     */
+    public OrderDtos.TrackingView tracking(String orderNo, Long actorId, boolean seller) {
+        Order order = orderMapper.selectByOrderNo(orderNo);
+        if (order == null) {
+            throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!seller && !Objects.equals(order.getCustomerId(), actorId)) {
+            throw new BizException(ErrorCode.ORDER_ACCESS_DENIED);
+        }
+        if (order.getShippedAt() == null || order.getTrackingNo() == null) {
+            throw new BizException(ErrorCode.NOT_FOUND.getCode(), "订单尚未发货，暂无物流轨迹");
+        }
+
+        LocalDateTime shippedAt = order.getShippedAt();
+        LocalDateTime now = LocalDateTime.now();
+        List<OrderDtos.TrackNode> nodes = new ArrayList<>();
+        addNode(nodes, now, shippedAt, "【已揽收】快件已由顺丰速运揽收", "杭州市 顺丰速运文创园营业点");
+        addNode(nodes, now, shippedAt.plusHours(6), "【运输中】快件已到达杭州转运中心", "杭州市 杭州转运中心");
+        addNode(nodes, now, shippedAt.plusHours(18), "【运输中】快件已从杭州转运中心发出", "杭州市 杭州转运中心");
+        addNode(nodes, now, shippedAt.plusHours(30), "【派送中】快件正在派送，请保持电话畅通",
+                "收货地址所在网点");
+        if (order.getStatus() != null && order.getStatus() == OrderStatus.COMPLETED.getCode()) {
+            addNode(nodes, now, shippedAt.plusHours(36), "【已签收】快件已签收，感谢使用顺丰速运", null);
+        }
+        // 最新节点在前
+        nodes.sort((a, b) -> b.time().compareTo(a.time()));
+
+        String latest = nodes.isEmpty() ? "暂无轨迹" : nodes.get(0).text();
+        return new OrderDtos.TrackingView(
+                order.getOrderNo(),
+                CARRIER_SF,
+                CARRIER_SF_NAME,
+                order.getTrackingNo(),
+                order.getStatus(),
+                OrderStatus.textOf(order.getStatus()),
+                latest,
+                nodes);
+    }
+
+    /** 只展示已经发生的节点，避免出现“未来时间”的轨迹。 */
+    private void addNode(List<OrderDtos.TrackNode> nodes, LocalDateTime now,
+                         LocalDateTime nodeTime, String text, String location) {
+        if (!nodeTime.isAfter(now)) {
+            nodes.add(new OrderDtos.TrackNode(TimeUtil.format(nodeTime), text, location));
+        }
+    }
+
+    /** 单号校验与生成：不传则生成 SF + 12 位数字的模拟顺丰单号。 */
+    private String normalizeTrackingNo(String trackingNo) {
+        if (trackingNo == null || trackingNo.isBlank()) {
+            return CARRIER_SF + String.format("%012d",
+                    java.util.concurrent.ThreadLocalRandom.current().nextLong(1_000_000_000_000L));
+        }
+        String trimmed = trackingNo.trim();
+        if (trimmed.length() > 32) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "物流单号不能超过 32 位");
+        }
+        if (!trimmed.matches("^[A-Za-z0-9-]{6,32}$")) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "物流单号只能包含字母、数字和短横线");
+        }
+        return trimmed;
+    }
+
     // ============ 查询 ============
 
     /** 我的订单：含已取消，按下单时间倒序分页。 */
@@ -347,7 +450,10 @@ public class OrderService {
                 money(order.getTotalAmount()),
                 itemCount,
                 TimeUtil.format(order.getCreatedAt()),
-                itemViews);
+                itemViews,
+                order.getCarrier(),
+                order.getTrackingNo(),
+                TimeUtil.format(order.getShippedAt()));
     }
 
     private String money(BigDecimal value) {
