@@ -18,8 +18,7 @@ public interface OrderDtos {
     }
 
     record OrderView(String orderNo, Integer status, String statusText, String finalResult,
-                     String totalAmount, Integer itemCount, String createdAt, List<ItemView> items,
-                     String carrier, String trackingNo, String shippedAt) {
+                     String totalAmount, Integer itemCount, String createdAt, List<ItemView> items) {
     }
 
     record OrderPage(List<OrderView> list, Long total, Integer page, Integer size) {
@@ -40,13 +39,13 @@ public interface OrderDtos {
     record StatusConflict(Integer currentStatus, Integer expectedStatus) {
     }
 
-    /** 发货入参（C2-2）：单号可不填，由后端生成模拟顺丰单号。 */
-    record ShipRequest(String trackingNo, String carrier) {
+    /** 发货入参（C2-2）：物流单号与快递公司均为必填，缺任一返回 40972。 */
+    record ShipRequest(String logisticsNo, String carrier) {
     }
 
-    /** 发货返回：单号与承运商一并回给前端，便于即时展示。 */
-    record ShipView(String orderNo, Integer status, String statusText,
-                    String carrier, String trackingNo, String shippedAt) {
+    /** 发货/改单号返回：单号与承运商一并回给前端，便于即时展示。 */
+    record ShipView(String orderNo, String logisticsNo, String carrier,
+                    String status, String statusText) {
     }
 
     /** 物流轨迹节点（契约字段名：time / desc）。 */
@@ -54,11 +53,11 @@ public interface OrderDtos {
     }
 
     /**
-     * 物流信息（C2-2），字段与《迭代 4 契约》一致：
-     * { logisticsNo, carrier, status, statusText, traces: [{time, desc}] }
+     * 物流信息（C2-2），字段与《接口契约-挑战需求C》一致：
+     * { orderNo, logisticsNo, carrier, status, statusText, traces: [{time, desc}] }
      * status 枚举：SHIPPED 已发货 / IN_TRANSIT 运输中 / SIGNED 已签收。
      */
-    record LogisticsView(String logisticsNo, String carrier, String status, String statusText,
-                         List<LogisticsTrace> traces) {
+    record LogisticsView(String orderNo, String logisticsNo, String carrier,
+                         String status, String statusText, List<LogisticsTrace> traces) {
     }
 }

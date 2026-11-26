@@ -36,10 +36,10 @@ public class AddressService {
     }
 
     /** 地址列表：默认地址置顶，其余按创建时间倒序。 */
-    public List<AddressDtos.AddressView> list(Long buyerId) {
-        requireBuyer(buyerId);
+    public List<AddressDtos.AddressView> list(Long customerId) {
+        requireBuyer(customerId);
         List<Address> rows = addressMapper.selectList(new LambdaQueryWrapper<Address>()
-                .eq(Address::getBuyerId, buyerId)
+                .eq(Address::getCustomerId, customerId)
                 .orderByDesc(Address::getIsDefault)
                 .orderByDesc(Address::getCreatedAt)
                 .orderByDesc(Address::getId));
@@ -47,12 +47,12 @@ public class AddressService {
     }
 
     @Transactional
-    public AddressDtos.AddressView create(Long buyerId, AddressDtos.SaveRequest req) {
-        requireBuyer(buyerId);
+    public AddressDtos.AddressView create(Long customerId, AddressDtos.SaveRequest req) {
+        requireBuyer(customerId);
         validate(req, true);
 
         long count = addressMapper.selectCount(new LambdaQueryWrapper<Address>()
-                .eq(Address::getBuyerId, buyerId));
+                .eq(Address::getCustomerId, customerId));
         if (count >= MAX_PER_BUYER) {
             throw new BizException(ErrorCode.ADDRESS_LIMIT);
         }
@@ -60,11 +60,11 @@ public class AddressService {
         boolean first = count == 0;
         boolean asDefault = first || Boolean.TRUE.equals(req.isDefault());
         if (asDefault) {
-            addressMapper.clearDefault(buyerId);
+            addressMapper.clearDefault(customerId);
         }
 
         Address entity = new Address();
-        entity.setBuyerId(buyerId);
+        entity.setCustomerId(customerId);
         applyFields(entity, req, true);
         entity.setIsDefault(asDefault ? DEFAULT : NOT_DEFAULT);
         entity.setCreatedAt(LocalDateTime.now());
@@ -74,13 +74,13 @@ public class AddressService {
     }
 
     @Transactional
-    public AddressDtos.AddressView update(Long buyerId, Long id, AddressDtos.SaveRequest req) {
-        Address entity = requireOwned(buyerId, id);
+    public AddressDtos.AddressView update(Long customerId, Long id, AddressDtos.SaveRequest req) {
+        Address entity = requireOwned(customerId, id);
         validate(req, false);
         applyFields(entity, req, false);
 
         if (Boolean.TRUE.equals(req.isDefault())) {
-            addressMapper.clearDefault(buyerId);
+            addressMapper.clearDefault(customerId);
             entity.setIsDefault(DEFAULT);
         }
         entity.setUpdatedAt(LocalDateTime.now());
@@ -89,31 +89,31 @@ public class AddressService {
     }
 
     @Transactional
-    public void delete(Long buyerId, Long id) {
-        Address entity = requireOwned(buyerId, id);
+    public void delete(Long customerId, Long id) {
+        Address entity = requireOwned(customerId, id);
         addressMapper.deleteById(id);
         if (entity.getIsDefault() != null && entity.getIsDefault() == DEFAULT) {
-            promoteLatestCreated(buyerId);
+            promoteLatestCreated(customerId);
         }
     }
 
-    /** 设置默认地址：该条置 1，同客户其余清零。 */
+    /** 设置默认地址：该条置 1，同客户其余清零；返回 { addressId, isDefault }。 */
     @Transactional
-    public AddressDtos.AddressView setDefault(Long buyerId, Long id) {
-        Address entity = requireOwned(buyerId, id);
-        addressMapper.clearDefault(buyerId);
+    public AddressDtos.DefaultView setDefault(Long customerId, Long id) {
+        Address entity = requireOwned(customerId, id);
+        addressMapper.clearDefault(customerId);
         entity.setIsDefault(DEFAULT);
         entity.setUpdatedAt(LocalDateTime.now());
         addressMapper.updateById(entity);
-        return toView(entity);
+        return new AddressDtos.DefaultView(String.valueOf(entity.getId()), true);
     }
 
     // ============ 私有辅助 ============
 
     /** 删除默认地址后，把最近创建的一条提升为默认；没有地址时不做处理。 */
-    private void promoteLatestCreated(Long buyerId) {
+    private void promoteLatestCreated(Long customerId) {
         Address latest = addressMapper.selectOne(new LambdaQueryWrapper<Address>()
-                .eq(Address::getBuyerId, buyerId)
+                .eq(Address::getCustomerId, customerId)
                 .orderByDesc(Address::getCreatedAt)
                 .orderByDesc(Address::getId)
                 .last("LIMIT 1"));
@@ -125,20 +125,20 @@ public class AddressService {
     }
 
     /** 先判存在（40951），再判归属（40953）。 */
-    private Address requireOwned(Long buyerId, Long id) {
-        requireBuyer(buyerId);
+    private Address requireOwned(Long customerId, Long id) {
+        requireBuyer(customerId);
         Address entity = addressMapper.selectById(id);
         if (entity == null) {
             throw new BizException(ErrorCode.ADDRESS_NOT_FOUND);
         }
-        if (!buyerId.equals(entity.getBuyerId())) {
+        if (!customerId.equals(entity.getCustomerId())) {
             throw new BizException(ErrorCode.ADDRESS_ACCESS_DENIED);
         }
         return entity;
     }
 
-    private void requireBuyer(Long buyerId) {
-        if (buyerId == null) {
+    private void requireBuyer(Long customerId) {
+        if (customerId == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED);
         }
     }

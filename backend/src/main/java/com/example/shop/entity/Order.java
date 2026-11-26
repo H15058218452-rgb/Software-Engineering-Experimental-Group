@@ -27,12 +27,6 @@ public class Order {
     private BigDecimal totalAmount;
     /** 10客户下单 20商家确认 30备货完成 40已发货 50交易完成 90已取消 */
     private Integer status;
-    /** 物流单号，发货时写入（挑战需求 C2-2） */
-    private String trackingNo;
-    /** 物流公司编码，目前固定 SF 顺丰 */
-    private String carrier;
-    /** 发货时间，物流轨迹的起点 */
-    private LocalDateTime shippedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -46,12 +40,6 @@ public class Order {
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
-    public String getTrackingNo() { return trackingNo; }
-    public void setTrackingNo(String trackingNo) { this.trackingNo = trackingNo; }
-    public String getCarrier() { return carrier; }
-    public void setCarrier(String carrier) { this.carrier = carrier; }
-    public LocalDateTime getShippedAt() { return shippedAt; }
-    public void setShippedAt(LocalDateTime shippedAt) { this.shippedAt = shippedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

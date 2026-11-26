@@ -193,18 +193,32 @@ CREATE TABLE IF NOT EXISTS favorite (
 --    - 与 buyer.address（默认交易地点）区分：后者是账号资料，这里是地址簿
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS address (
-    id         BIGINT       NOT NULL AUTO_INCREMENT,
-    buyer_id   BIGINT       NOT NULL COMMENT '所属买家ID',
-    receiver   VARCHAR(20)  NOT NULL COMMENT '收货人',
-    phone      VARCHAR(11)  NOT NULL COMMENT '收货人手机号',
-    region     VARCHAR(50)  NOT NULL COMMENT '所在地区，如：浙江省杭州市西湖区',
-    detail     VARCHAR(200) NOT NULL COMMENT '详细地址',
-    is_default TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
-    created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    customer_id BIGINT       NOT NULL COMMENT '所属客户ID',
+    receiver    VARCHAR(20)  NOT NULL COMMENT '收货人',
+    phone       VARCHAR(11)  NOT NULL COMMENT '收货人手机号',
+    region      VARCHAR(50)  NOT NULL COMMENT '所在地区，如：浙江省杭州市西湖区',
+    detail      VARCHAR(200) NOT NULL COMMENT '详细地址',
+    is_default  TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
+    created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_address_buyer (buyer_id, is_default, created_at)
+    KEY idx_address_customer (customer_id, is_default, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家收货地址簿';
+
+-- 订单物流（挑战需求 C2-2）：一个订单只有一条物流记录
+CREATE TABLE IF NOT EXISTS logistics (
+    id           BIGINT      NOT NULL AUTO_INCREMENT,
+    order_no     VARCHAR(32) NOT NULL COMMENT '订单号，一单一运单',
+    logistics_no VARCHAR(32) NOT NULL COMMENT '物流单号',
+    carrier      VARCHAR(32) NOT NULL COMMENT '快递公司',
+    status       VARCHAR(16) NOT NULL DEFAULT 'SHIPPED' COMMENT 'SHIPPED/IN_TRANSIT/SIGNED',
+    created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_logistics_order (order_no),
+    KEY idx_logistics_no (logistics_no)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '订单物流信息';
 
 -- -----------------------------------------------------
 -- 9. 种子数据：默认卖家账号

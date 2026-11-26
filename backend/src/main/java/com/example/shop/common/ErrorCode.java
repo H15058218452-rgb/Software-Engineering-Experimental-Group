@@ -43,6 +43,7 @@ public enum ErrorCode {
     ADDRESS_REQUIRED(40954, "您还没有收货地址，请先新增地址"),
     // ===== 物流域（迭代 4 · 挑战需求 C，契约：40971~40972）=====
     LOGISTICS_NOT_SHIPPED(40971, "订单未发货，无物流信息"),
+    LOGISTICS_NO_EMPTY(40972, "物流单号或快递公司为空"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;

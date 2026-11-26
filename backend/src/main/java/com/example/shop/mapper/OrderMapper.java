@@ -32,21 +32,4 @@ public interface OrderMapper extends BaseMapper<Order> {
     int casStatus(@Param("orderNo") String orderNo,
                   @Param("from") int from,
                   @Param("to") int to);
-
-    /**
-     * 发货 CAS（挑战需求 C2-2）：仅当订单处于“备货完成”时写入物流单号并推进到“已发货”。
-     * 单号与状态同一条语句写入，避免出现“已发货但没有单号”的中间态。
-     */
-    @Update("UPDATE `order` SET status = #{to}, tracking_no = #{trackingNo}, carrier = #{carrier}, "
-            + "shipped_at = NOW(3), updated_at = NOW(3) "
-            + "WHERE order_no = #{orderNo} AND status = #{from}")
-    int shipWithTracking(@Param("orderNo") String orderNo,
-                         @Param("from") int from,
-                         @Param("to") int to,
-                         @Param("trackingNo") String trackingNo,
-                         @Param("carrier") String carrier);
-
-    /** 按物流单号反查订单，供轨迹查询接口使用。 */
-    @Select("SELECT * FROM `order` WHERE tracking_no = #{trackingNo}")
-    Order selectByTrackingNo(@Param("trackingNo") String trackingNo);
 }

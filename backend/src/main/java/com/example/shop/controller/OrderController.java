@@ -10,6 +10,7 @@ import com.example.shop.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -78,7 +79,7 @@ public class OrderController {
         return ApiResponse.ok(orderService.advance(orderNo, OrderAction.READY));
     }
 
-    /** 发货（C2-2）：卖家填写物流单号，不填则生成模拟顺丰单号。 */
+    /** 发货（C.2-03）：物流单号与快递公司必填，空返回 40972。 */
     @PostMapping("/{orderNo}/ship")
     public ApiResponse<OrderDtos.ShipView> ship(
             @PathVariable String orderNo,
@@ -86,6 +87,16 @@ public class OrderController {
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         requireSeller(authorization);
         return ApiResponse.ok(orderService.ship(orderNo, request));
+    }
+
+    /** 修改物流单号（C.2-03）：仅已发货且客户未签收时可改。 */
+    @PutMapping("/{orderNo}/logistics")
+    public ApiResponse<OrderDtos.ShipView> updateLogistics(
+            @PathVariable String orderNo,
+            @RequestBody(required = false) OrderDtos.ShipRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        requireSeller(authorization);
+        return ApiResponse.ok(orderService.updateLogistics(orderNo, request));
     }
 
     /** 物流信息（C2-2 / 契约 C.2-04）：买家查自己的订单，卖家可查全部；未发货返回 40971。 */

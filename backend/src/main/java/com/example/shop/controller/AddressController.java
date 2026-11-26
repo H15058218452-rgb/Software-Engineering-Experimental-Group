@@ -35,11 +35,11 @@ public class AddressController {
         this.jwtUtil = jwtUtil;
     }
 
-    /** 地址列表：默认地址置顶。 */
+    /** 地址列表：默认地址置顶，返回 data.list。 */
     @GetMapping
-    public ApiResponse<List<AddressDtos.AddressView>> list(
+    public ApiResponse<AddressDtos.ListView> list(
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return ApiResponse.ok(addressService.list(requireBuyerId(authorization)));
+        return ApiResponse.ok(new AddressDtos.ListView(addressService.list(requireCustomerId(authorization))));
     }
 
     /** 新增地址；第一条自动设为默认。 */
@@ -47,7 +47,7 @@ public class AddressController {
     public ApiResponse<AddressDtos.AddressView> create(
             @RequestBody AddressDtos.SaveRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return ApiResponse.ok(addressService.create(requireBuyerId(authorization), request));
+        return ApiResponse.ok(addressService.create(requireCustomerId(authorization), request));
     }
 
     /** 修改地址；isDefault=true 时同步切换默认地址。 */
@@ -56,7 +56,7 @@ public class AddressController {
             @PathVariable Long id,
             @RequestBody AddressDtos.SaveRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return ApiResponse.ok(addressService.update(requireBuyerId(authorization), id, request));
+        return ApiResponse.ok(addressService.update(requireCustomerId(authorization), id, request));
     }
 
     /** 删除地址；若删的是默认地址，自动提升最近一条为默认。 */
@@ -64,23 +64,23 @@ public class AddressController {
     public ApiResponse<Void> delete(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        addressService.delete(requireBuyerId(authorization), id);
+        addressService.delete(requireCustomerId(authorization), id);
         return ApiResponse.ok();
     }
 
-    /** 设置默认地址。 */
+    /** 设置默认地址：返回 { addressId, isDefault }。 */
     @PutMapping("/{id}/default")
-    public ApiResponse<AddressDtos.AddressView> setDefault(
+    public ApiResponse<AddressDtos.DefaultView> setDefault(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return ApiResponse.ok(addressService.setDefault(requireBuyerId(authorization), id));
+        return ApiResponse.ok(addressService.setDefault(requireCustomerId(authorization), id));
     }
 
-    private Long requireBuyerId(String authorization) {
+    private Long requireCustomerId(String authorization) {
         if (authorization != null && authorization.startsWith("Bearer ")) {
-            Long buyerId = jwtUtil.parse(authorization.substring(7));
-            if (buyerId != null) {
-                return buyerId;
+            Long customerId = jwtUtil.parse(authorization.substring(7));
+            if (customerId != null) {
+                return customerId;
             }
         }
         throw new BizException(ErrorCode.UNAUTHORIZED);
