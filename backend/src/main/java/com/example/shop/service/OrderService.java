@@ -49,16 +49,21 @@ public class OrderService {
 
     private static final int MAX_ITEMS = 20;
     private static final int MAX_QUANTITY = 99;
+    /** 下单后支付时限（小时），超时由 OrderTimeoutJob 自动取消并回补库存。 */
+    private static final int PAY_TIMEOUT_HOURS = 24;
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final ProductMapper productMapper;
+    private final PaymentService paymentService;
 
-    public OrderService(OrderMapper orderMapper, OrderItemMapper orderItemMapper, ProductMapper productMapper) {
+    public OrderService(OrderMapper orderMapper, OrderItemMapper orderItemMapper, ProductMapper productMapper,
+                        PaymentService paymentService) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.productMapper = productMapper;
+        this.paymentService = paymentService;
     }
 
     // ============ 下单 ============
@@ -123,7 +128,8 @@ public class OrderService {
                 .map(l -> l.subtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP));
-        order.setStatus(OrderStatus.PENDING.getCode());
+        order.setStatus(OrderStatus.WAIT_PAY.getCode());
+        order.setPayDeadline(now.plusHours(PAY_TIMEOUT_HOURS));
         order.setCreatedAt(now);
         order.setUpdatedAt(now);
         orderMapper.insert(order);
@@ -145,7 +151,7 @@ public class OrderService {
 
     // ============ 状态推进 / 取消 ============
 
-    /** 商家正向推进：confirm / ready / ship / complete，前置状态不匹配一律 40921。 */
+    /** 商家正向推进：confirm / ready / ship，前置状态不匹配一律 40921。交易完成改由客户确认收货。 */
     @Transactional
     public OrderDtos.StatusView advance(String orderNo, OrderAction action) {
         Order order = lockOrder(orderNo);
@@ -170,8 +176,11 @@ public class OrderService {
     }
 
     /**
-     * 取消订单：客户只能取消 10/20/30，商家可取消 10/20/30/40；终态 40923。
-     * 成功后同事务按明细回补库存，因库存耗尽下架的商品自动恢复在售。
+     * 取消订单（C.1-1 规则）。
+     *
+     * 客户：10/15/18/20/30 可取消，已发货后不可取消；
+     * 商家：额外允许 40 已发货，但款项退回后库存不回补（货已在途）。
+     * 已支付（18 及之后）取消时同事务发起原路退款；未发货状态同事务回补库存。
      */
     @Transactional
     public OrderDtos.StatusView cancel(String orderNo, Long actorId, boolean seller) {
@@ -189,31 +198,69 @@ public class OrderService {
         if (OrderStatus.isFinal(current)) {
             throw new BizException(ErrorCode.ORDER_FINALIZED);
         }
-        boolean allowed = seller
-                ? current == OrderStatus.PENDING.getCode()
-                || current == OrderStatus.CONFIRMED.getCode()
-                || current == OrderStatus.READY.getCode()
-                || current == OrderStatus.SHIPPED.getCode()
-                : current == OrderStatus.PENDING.getCode()
-                || current == OrderStatus.CONFIRMED.getCode()
-                || current == OrderStatus.READY.getCode();
+
+        boolean allowed = seller ? isSellerCancellable(current) : isCustomerCancellable(current);
         if (!allowed) {
             throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
-                    seller ? "订单已发货完成，不可取消" : "订单已发货，客户不可取消",
+                    seller ? "订单已完成或已取消，不可取消" : "订单已发货，客户不可取消，请联系商家",
                     new OrderDtos.StatusConflict(current, null));
         }
 
-        List<OrderItem> items = orderItemMapper.selectByOrderId(order.getId());
-        for (OrderItem item : items) {
-            productMapper.restoreStock(item.getProductId(), item.getQuantity());
-            productMapper.restoreOnSaleIfSoldOut(item.getProductId());
+        // 已发货取消：货已在途，库存不回补，只退款
+        if (current != OrderStatus.SHIPPED.getCode()) {
+            restoreStock(order);
         }
-
+        // 已支付订单：原路退款，与状态变更同事务
+        if (OrderStatus.isPaid(current)) {
+            paymentService.refund(orderNo);
+        }
         if (orderMapper.casStatus(orderNo, current, OrderStatus.CANCELLED.getCode()) != 1) {
             throw new BizException(ErrorCode.CONCURRENT_CONFLICT);
         }
         return new OrderDtos.StatusView(orderNo, OrderStatus.CANCELLED.getCode(),
                 OrderStatus.CANCELLED.getText());
+    }
+
+    /** 客户确认收货：40 已发货 → 50 交易完成，仅买家本人可操作，系统不做超时自动确认。 */
+    @Transactional
+    public OrderDtos.StatusView receive(String orderNo, Long customerId) {
+        if (customerId == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        Order order = lockOrder(orderNo);
+        if (!Objects.equals(order.getCustomerId(), customerId)) {
+            throw new BizException(ErrorCode.ORDER_ACCESS_DENIED);
+        }
+        int current = order.getStatus();
+        if (OrderStatus.isFinal(current)) {
+            throw new BizException(ErrorCode.ORDER_FINALIZED);
+        }
+        if (current != OrderStatus.SHIPPED.getCode()) {
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "只有「已发货」的订单才能确认收货",
+                    new OrderDtos.StatusConflict(current, OrderStatus.SHIPPED.getCode()));
+        }
+        if (orderMapper.casStatus(orderNo, OrderStatus.SHIPPED.getCode(), OrderStatus.COMPLETED.getCode()) != 1) {
+            throw new BizException(ErrorCode.CONCURRENT_CONFLICT);
+        }
+        return new OrderDtos.StatusView(orderNo, OrderStatus.COMPLETED.getCode(),
+                OrderStatus.COMPLETED.getText());
+    }
+
+    /**
+     * 支付超时自动取消，由 OrderTimeoutJob 调用。
+     * 只处理仍处于 15 待支付的订单，重复执行安全。
+     */
+    @Transactional
+    public boolean cancelExpired(String orderNo) {
+        Order order = orderMapper.selectByOrderNoForUpdate(orderNo);
+        if (order == null || order.getStatus() == null
+                || order.getStatus() != OrderStatus.WAIT_PAY.getCode()) {
+            return false;
+        }
+        restoreStock(order);
+        return orderMapper.casStatus(orderNo, OrderStatus.WAIT_PAY.getCode(),
+                OrderStatus.CANCELLED.getCode()) == 1;
     }
 
     // ============ 查询 ============
@@ -248,6 +295,33 @@ public class OrderService {
     }
 
     // ============ 私有辅助 ============
+
+    /** 商家可取消：下单到已发货之间，交易完成后不可。 */
+    private boolean isSellerCancellable(int status) {
+        return status == OrderStatus.PENDING.getCode()
+                || status == OrderStatus.WAIT_PAY.getCode()
+                || status == OrderStatus.PAID.getCode()
+                || status == OrderStatus.CONFIRMED.getCode()
+                || status == OrderStatus.READY.getCode()
+                || status == OrderStatus.SHIPPED.getCode();
+    }
+
+    /** 客户可取消：已发货之前，发货后只能等收货或走售后。 */
+    private boolean isCustomerCancellable(int status) {
+        return status == OrderStatus.PENDING.getCode()
+                || status == OrderStatus.WAIT_PAY.getCode()
+                || status == OrderStatus.PAID.getCode()
+                || status == OrderStatus.CONFIRMED.getCode()
+                || status == OrderStatus.READY.getCode();
+    }
+
+    /** 按明细回补可售库存；库存从 0 回补时把因售罄下架的商品恢复在售。 */
+    private void restoreStock(Order order) {
+        for (OrderItem item : orderItemMapper.selectByOrderId(order.getId())) {
+            productMapper.restoreStock(item.getProductId(), item.getQuantity());
+            productMapper.restoreOnSaleIfSoldOut(item.getProductId());
+        }
+    }
 
     private Order lockOrder(String orderNo) {
         if (orderNo == null || orderNo.isBlank()) {
@@ -347,6 +421,8 @@ public class OrderService {
                 money(order.getTotalAmount()),
                 itemCount,
                 TimeUtil.format(order.getCreatedAt()),
+                TimeUtil.format(order.getPayDeadline()),
+                TimeUtil.format(order.getPaidAt()),
                 itemViews);
     }
 
