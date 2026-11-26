@@ -17,8 +17,10 @@ public interface OrderDtos {
     record ItemView(String productId, String name, String price, Integer quantity, String subtotal) {
     }
 
+    /** 订单视图：expireAt 为待支付倒计时截止时间（C 阶段新增），已支付后为 null 也不用清空。 */
     record OrderView(String orderNo, Integer status, String statusText, String finalResult,
-                     String totalAmount, Integer itemCount, String createdAt, List<ItemView> items) {
+                     String totalAmount, Integer itemCount, String createdAt, String expireAt,
+                     String paidAt, List<ItemView> items) {
     }
 
     record OrderPage(List<OrderView> list, Long total, Integer page, Integer size) {

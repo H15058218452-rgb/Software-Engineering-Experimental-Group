@@ -108,15 +108,29 @@ public class OrderController {
         return ApiResponse.ok(orderService.logistics(orderNo, actor.id(), actor.seller()));
     }
 
+    /**
+     * 已废弃（C.1-1）：交易完成改由客户「确认收货」触发。
+     * 保留路径只为让旧前端拿到明确提示，不再改变订单状态。
+     */
     @PostMapping("/{orderNo}/complete")
     public ApiResponse<OrderDtos.StatusView> complete(
             @PathVariable String orderNo,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         requireSeller(authorization);
-        return ApiResponse.ok(orderService.advance(orderNo, OrderAction.COMPLETE));
+        throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                "交易完成改由客户确认收货触发，请使用 /api/order/" + orderNo + "/receive");
     }
 
-    /** 取消：客户可取消 10/20/30，商家可取消 10/20/30/40。 */
+    /** 客户确认收货：40 已发货 → 50 交易完成，仅买家本人可操作。 */
+    @PostMapping("/{orderNo}/receive")
+    public ApiResponse<OrderDtos.StatusView> receive(
+            @PathVariable String orderNo,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        Actor actor = requireBuyer(authorization);
+        return ApiResponse.ok(orderService.receive(orderNo, actor.id()));
+    }
+
+    /** 取消：客户可取消 10/15/18/20/30，商家可取消 10/15/18/20/30/40。 */
     @PostMapping("/{orderNo}/cancel")
     public ApiResponse<OrderDtos.StatusView> cancel(
             @PathVariable String orderNo,
