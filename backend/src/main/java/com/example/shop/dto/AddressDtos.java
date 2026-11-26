@@ -1,18 +1,19 @@
 package com.example.shop.dto;
 
 /**
- * 收货地址 DTO（挑战需求 C2-1）。ID 用字符串，与其他域保持一致。
+ * 收货地址 DTO（挑战需求 C2-1）。
+ *
+ * 字段与《迭代 4 契约》一致：receiver / phone / region / detail；
+ * 响应中的地址主键字段名为 addressId，前端页面直接使用该字段。
  */
 public interface AddressDtos {
 
-    /** 新增/修改入参；修改时不传的字段按 null 处理为“不修改”。 */
-    record SaveRequest(String receiverName, String receiverPhone,
-                       String province, String city, String district, String detail,
+    /** 新增/修改入参；修改时字段全部可选，传了才覆盖。 */
+    record SaveRequest(String receiver, String phone, String region, String detail,
                        Boolean isDefault) {
     }
 
-    record AddressView(String id, String receiverName, String receiverPhone,
-                       String province, String city, String district, String detail,
-                       String fullAddress, Boolean isDefault) {
+    record AddressView(String addressId, String receiver, String phone,
+                       String region, String detail, Boolean isDefault) {
     }
 }

@@ -49,12 +49,16 @@ public interface OrderDtos {
                     String carrier, String trackingNo, String shippedAt) {
     }
 
-    /** 轨迹节点：time 为 ISO 8601 带 +08:00，location 可为空。 */
-    record TrackNode(String time, String text, String location) {
+    /** 物流轨迹节点（契约字段名：time / desc）。 */
+    record LogisticsTrace(String time, String desc) {
     }
 
-    /** 物流轨迹（C2-2）：latest 为最新一条节点文案，nodes 按时间倒序。 */
-    record TrackingView(String orderNo, String carrier, String carrierName, String trackingNo,
-                        Integer status, String statusText, String latest, List<TrackNode> nodes) {
+    /**
+     * 物流信息（C2-2），字段与《迭代 4 契约》一致：
+     * { logisticsNo, carrier, status, statusText, traces: [{time, desc}] }
+     * status 枚举：SHIPPED 已发货 / IN_TRANSIT 运输中 / SIGNED 已签收。
+     */
+    record LogisticsView(String logisticsNo, String carrier, String status, String statusText,
+                         List<LogisticsTrace> traces) {
     }
 }

@@ -219,7 +219,6 @@ public class OrderService {
     // ============ 发货与物流轨迹（挑战需求 C2-2） ============
 
     private static final String CARRIER_SF = "SF";
-    private static final String CARRIER_SF_NAME = "顺丰速运";
 
     /**
      * 卖家发货并填写物流单号：仅「备货完成」可发货；单号不填时生成模拟顺丰单号。
@@ -254,10 +253,11 @@ public class OrderService {
     }
 
     /**
-     * 物流轨迹查询：买家只能查自己的订单，卖家可查全部。
-     * 轨迹由「模拟顺丰服务」按发货时间推算，不依赖外部网络，便于离线演示与验收。
+     * 物流信息查询（契约 C.2-04）：买家只能查自己的订单，卖家可查全部。
+     * 返回 { logisticsNo, carrier, status, statusText, traces }，轨迹由「模拟顺丰服务」按发货时间推算，
+     * 不依赖外部网络，便于离线演示与验收。
      */
-    public OrderDtos.TrackingView tracking(String orderNo, Long actorId, boolean seller) {
+    public OrderDtos.LogisticsView logistics(String orderNo, Long actorId, boolean seller) {
         Order order = orderMapper.selectByOrderNo(orderNo);
         if (order == null) {
             throw new BizException(ErrorCode.ORDER_NOT_FOUND);
@@ -266,40 +266,52 @@ public class OrderService {
             throw new BizException(ErrorCode.ORDER_ACCESS_DENIED);
         }
         if (order.getShippedAt() == null || order.getTrackingNo() == null) {
-            throw new BizException(ErrorCode.NOT_FOUND.getCode(), "订单尚未发货，暂无物流轨迹");
+            throw new BizException(ErrorCode.LOGISTICS_NOT_SHIPPED);
         }
 
         LocalDateTime shippedAt = order.getShippedAt();
         LocalDateTime now = LocalDateTime.now();
-        List<OrderDtos.TrackNode> nodes = new ArrayList<>();
-        addNode(nodes, now, shippedAt, "【已揽收】快件已由顺丰速运揽收", "杭州市 顺丰速运文创园营业点");
-        addNode(nodes, now, shippedAt.plusHours(6), "【运输中】快件已到达杭州转运中心", "杭州市 杭州转运中心");
-        addNode(nodes, now, shippedAt.plusHours(18), "【运输中】快件已从杭州转运中心发出", "杭州市 杭州转运中心");
-        addNode(nodes, now, shippedAt.plusHours(30), "【派送中】快件正在派送，请保持电话畅通",
-                "收货地址所在网点");
+        List<OrderDtos.LogisticsTrace> traces = new ArrayList<>();
+        addTrace(traces, now, shippedAt, "快件已由顺丰速运揽收");
+        addTrace(traces, now, shippedAt.plusHours(6), "快件已到达杭州转运中心");
+        addTrace(traces, now, shippedAt.plusHours(18), "快件已从杭州转运中心发出");
+        addTrace(traces, now, shippedAt.plusHours(30), "快件正在派送，请保持电话畅通");
         if (order.getStatus() != null && order.getStatus() == OrderStatus.COMPLETED.getCode()) {
-            addNode(nodes, now, shippedAt.plusHours(36), "【已签收】快件已签收，感谢使用顺丰速运", null);
+            addTrace(traces, now, shippedAt.plusHours(36), "快件已签收，感谢使用顺丰速运");
         }
         // 最新节点在前
-        nodes.sort((a, b) -> b.time().compareTo(a.time()));
+        traces.sort((a, b) -> b.time().compareTo(a.time()));
 
-        String latest = nodes.isEmpty() ? "暂无轨迹" : nodes.get(0).text();
-        return new OrderDtos.TrackingView(
-                order.getOrderNo(),
-                CARRIER_SF,
-                CARRIER_SF_NAME,
+        String status = logisticsStatus(order, shippedAt, now);
+        return new OrderDtos.LogisticsView(
                 order.getTrackingNo(),
-                order.getStatus(),
-                OrderStatus.textOf(order.getStatus()),
-                latest,
-                nodes);
+                CARRIER_SF,
+                status,
+                logisticsStatusText(status),
+                traces);
+    }
+
+    /** 契约枚举：SHIPPED 已发货（12 小时内）/ IN_TRANSIT 运输中 / SIGNED 已签收（订单完成）。 */
+    private String logisticsStatus(Order order, LocalDateTime shippedAt, LocalDateTime now) {
+        if (order.getStatus() != null && order.getStatus() == OrderStatus.COMPLETED.getCode()) {
+            return "SIGNED";
+        }
+        return shippedAt.plusHours(12).isAfter(now) ? "SHIPPED" : "IN_TRANSIT";
+    }
+
+    private String logisticsStatusText(String status) {
+        return switch (status) {
+            case "SIGNED" -> "已签收";
+            case "IN_TRANSIT" -> "运输中";
+            default -> "已发货";
+        };
     }
 
     /** 只展示已经发生的节点，避免出现“未来时间”的轨迹。 */
-    private void addNode(List<OrderDtos.TrackNode> nodes, LocalDateTime now,
-                         LocalDateTime nodeTime, String text, String location) {
+    private void addTrace(List<OrderDtos.LogisticsTrace> traces, LocalDateTime now,
+                          LocalDateTime nodeTime, String desc) {
         if (!nodeTime.isAfter(now)) {
-            nodes.add(new OrderDtos.TrackNode(TimeUtil.format(nodeTime), text, location));
+            traces.add(new OrderDtos.LogisticsTrace(TimeUtil.format(nodeTime), desc));
         }
     }
 

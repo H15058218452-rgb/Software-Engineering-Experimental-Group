@@ -20,10 +20,11 @@ import java.util.List;
 
 /**
  * 买家收货地址接口（挑战需求 C2-1 #22647）。
+ * 路径按《迭代 4 契约》为 /api/address，与前端 AddressList.vue 对齐；
  * 全部要求登录态，身份取自 Authorization 头中的买家 token。
  */
 @RestController
-@RequestMapping("/api/buyer/addresses")
+@RequestMapping("/api/address")
 public class AddressController {
 
     private final AddressService addressService;

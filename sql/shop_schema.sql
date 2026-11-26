@@ -193,19 +193,17 @@ CREATE TABLE IF NOT EXISTS favorite (
 --    - 与 buyer.address（默认交易地点）区分：后者是账号资料，这里是地址簿
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS address (
-    id             BIGINT       NOT NULL AUTO_INCREMENT,
-    buyer_id       BIGINT       NOT NULL COMMENT '所属买家ID',
-    receiver_name  VARCHAR(32)  NOT NULL COMMENT '收货人',
-    receiver_phone VARCHAR(20)  NOT NULL COMMENT '收货人手机号',
-    province       VARCHAR(32)  NOT NULL COMMENT '省',
-    city           VARCHAR(32)  NOT NULL COMMENT '市',
-    district       VARCHAR(32)  NULL     COMMENT '区/县',
-    detail         VARCHAR(200) NOT NULL COMMENT '详细地址',
-    is_default     TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
-    created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    id         BIGINT       NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT       NOT NULL COMMENT '所属买家ID',
+    receiver   VARCHAR(20)  NOT NULL COMMENT '收货人',
+    phone      VARCHAR(11)  NOT NULL COMMENT '收货人手机号',
+    region     VARCHAR(50)  NOT NULL COMMENT '所在地区，如：浙江省杭州市西湖区',
+    detail     VARCHAR(200) NOT NULL COMMENT '详细地址',
+    is_default TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
+    created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_address_buyer (buyer_id, is_default, updated_at)
+    KEY idx_address_buyer (buyer_id, is_default, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家收货地址簿';
 
 -- -----------------------------------------------------

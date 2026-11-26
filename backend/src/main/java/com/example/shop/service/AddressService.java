@@ -15,15 +15,17 @@ import java.util.List;
 /**
  * 买家收货地址服务（挑战需求 C2-1：地址增删改查 + 设置默认地址）。
  *
- * 默认地址约束：
- * 1. 同一买家任意时刻最多一条 is_default = 1；
- * 2. 第一条地址自动成为默认；
- * 3. 删除默认地址后，自动把最近更新的一条提升为默认，避免出现“无默认”状态；
- * 4. 设置默认走“先清零、再置一”，两条语句在同一事务内，并发下也不会出现双默认。
+ * 契约口径（《迭代 4 契约》C.2-01）：
+ * 1. 同一客户最多 10 条地址，超出报 40952；
+ * 2. 默认地址排最前；第一条地址自动成为默认；
+ * 3. 设默认走「先清零、再置一」，同事务内完成，不会出现双默认；
+ * 4. 删除默认地址后，自动把最近创建的一条提升为默认；
+ * 5. 地址不存在报 40951，非本人操作报 40953。
  */
 @Service
 public class AddressService {
 
+    private static final int MAX_PER_BUYER = 10;
     private static final int DEFAULT = 1;
     private static final int NOT_DEFAULT = 0;
 
@@ -33,13 +35,13 @@ public class AddressService {
         this.addressMapper = addressMapper;
     }
 
-    /** 地址列表：默认地址置顶，其余按更新时间倒序。 */
+    /** 地址列表：默认地址置顶，其余按创建时间倒序。 */
     public List<AddressDtos.AddressView> list(Long buyerId) {
         requireBuyer(buyerId);
         List<Address> rows = addressMapper.selectList(new LambdaQueryWrapper<Address>()
                 .eq(Address::getBuyerId, buyerId)
                 .orderByDesc(Address::getIsDefault)
-                .orderByDesc(Address::getUpdatedAt)
+                .orderByDesc(Address::getCreatedAt)
                 .orderByDesc(Address::getId));
         return rows.stream().map(this::toView).toList();
     }
@@ -49,8 +51,13 @@ public class AddressService {
         requireBuyer(buyerId);
         validate(req, true);
 
-        boolean first = addressMapper.selectCount(new LambdaQueryWrapper<Address>()
-                .eq(Address::getBuyerId, buyerId)) == 0;
+        long count = addressMapper.selectCount(new LambdaQueryWrapper<Address>()
+                .eq(Address::getBuyerId, buyerId));
+        if (count >= MAX_PER_BUYER) {
+            throw new BizException(ErrorCode.ADDRESS_LIMIT);
+        }
+
+        boolean first = count == 0;
         boolean asDefault = first || Boolean.TRUE.equals(req.isDefault());
         if (asDefault) {
             addressMapper.clearDefault(buyerId);
@@ -86,11 +93,11 @@ public class AddressService {
         Address entity = requireOwned(buyerId, id);
         addressMapper.deleteById(id);
         if (entity.getIsDefault() != null && entity.getIsDefault() == DEFAULT) {
-            promoteLatest(buyerId);
+            promoteLatestCreated(buyerId);
         }
     }
 
-    /** 设置默认地址：把该条置为默认，其余清零。 */
+    /** 设置默认地址：该条置 1，同客户其余清零。 */
     @Transactional
     public AddressDtos.AddressView setDefault(Long buyerId, Long id) {
         Address entity = requireOwned(buyerId, id);
@@ -103,11 +110,11 @@ public class AddressService {
 
     // ============ 私有辅助 ============
 
-    /** 删除默认地址后，把最近更新的一条提升为默认；没有地址时不做处理。 */
-    private void promoteLatest(Long buyerId) {
+    /** 删除默认地址后，把最近创建的一条提升为默认；没有地址时不做处理。 */
+    private void promoteLatestCreated(Long buyerId) {
         Address latest = addressMapper.selectOne(new LambdaQueryWrapper<Address>()
                 .eq(Address::getBuyerId, buyerId)
-                .orderByDesc(Address::getUpdatedAt)
+                .orderByDesc(Address::getCreatedAt)
                 .orderByDesc(Address::getId)
                 .last("LIMIT 1"));
         if (latest != null) {
@@ -117,11 +124,15 @@ public class AddressService {
         }
     }
 
+    /** 先判存在（40951），再判归属（40953）。 */
     private Address requireOwned(Long buyerId, Long id) {
         requireBuyer(buyerId);
         Address entity = addressMapper.selectById(id);
-        if (entity == null || !buyerId.equals(entity.getBuyerId())) {
-            throw new BizException(ErrorCode.NOT_FOUND.getCode(), "收货地址不存在");
+        if (entity == null) {
+            throw new BizException(ErrorCode.ADDRESS_NOT_FOUND);
+        }
+        if (!buyerId.equals(entity.getBuyerId())) {
+            throw new BizException(ErrorCode.ADDRESS_ACCESS_DENIED);
         }
         return entity;
     }
@@ -132,31 +143,25 @@ public class AddressService {
         }
     }
 
-    /** 新增时全部字段必填；修改时允许只传需要变更的字段。 */
+    /** 新增时四项必填；修改时允许只传需要变更的字段。 */
     private void validate(AddressDtos.SaveRequest req, boolean full) {
         if (req == null) {
-            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "请求体不能为空");
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "提交内容为空");
         }
-        if (full || req.receiverName() != null) {
-            requireText(req.receiverName(), "收货人不能为空", 32);
+        if (full || req.receiver() != null) {
+            requireText(req.receiver(), "收货人不能为空", 20);
         }
-        if (full || req.receiverPhone() != null) {
-            String phone = requireText(req.receiverPhone(), "手机号不能为空", 20);
-            if (!phone.matches("^1\\d{10}$")) {
-                throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "手机号格式不正确");
+        if (full || req.phone() != null) {
+            String phone = requireText(req.phone(), "手机号不能为空", 11);
+            if (!phone.matches("^\\d{11}$")) {
+                throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "手机号须为 11 位数字");
             }
         }
-        if (full || req.province() != null) {
-            requireText(req.province(), "省份不能为空", 32);
-        }
-        if (full || req.city() != null) {
-            requireText(req.city(), "城市不能为空", 32);
+        if (full || req.region() != null) {
+            requireText(req.region(), "所在地区不能为空", 50);
         }
         if (full || req.detail() != null) {
             requireText(req.detail(), "详细地址不能为空", 200);
-        }
-        if (req.district() != null && req.district().trim().length() > 32) {
-            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "区县不能超过 32 字");
         }
     }
 
@@ -172,20 +177,14 @@ public class AddressService {
     }
 
     private void applyFields(Address entity, AddressDtos.SaveRequest req, boolean full) {
-        if (full || req.receiverName() != null) {
-            entity.setReceiverName(req.receiverName().trim());
+        if (full || req.receiver() != null) {
+            entity.setReceiver(req.receiver().trim());
         }
-        if (full || req.receiverPhone() != null) {
-            entity.setReceiverPhone(req.receiverPhone().trim());
+        if (full || req.phone() != null) {
+            entity.setPhone(req.phone().trim());
         }
-        if (full || req.province() != null) {
-            entity.setProvince(req.province().trim());
-        }
-        if (full || req.city() != null) {
-            entity.setCity(req.city().trim());
-        }
-        if (full || req.district() != null) {
-            entity.setDistrict(req.district() == null ? null : req.district().trim());
+        if (full || req.region() != null) {
+            entity.setRegion(req.region().trim());
         }
         if (full || req.detail() != null) {
             entity.setDetail(req.detail().trim());
@@ -193,18 +192,12 @@ public class AddressService {
     }
 
     private AddressDtos.AddressView toView(Address a) {
-        String full = a.getProvince() + a.getCity()
-                + (a.getDistrict() == null || a.getDistrict().isBlank() ? "" : a.getDistrict())
-                + a.getDetail();
         return new AddressDtos.AddressView(
                 String.valueOf(a.getId()),
-                a.getReceiverName(),
-                a.getReceiverPhone(),
-                a.getProvince(),
-                a.getCity(),
-                a.getDistrict(),
+                a.getReceiver(),
+                a.getPhone(),
+                a.getRegion(),
                 a.getDetail(),
-                full,
                 a.getIsDefault() != null && a.getIsDefault() == DEFAULT);
     }
 }

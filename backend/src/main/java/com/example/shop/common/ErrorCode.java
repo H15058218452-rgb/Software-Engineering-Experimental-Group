@@ -36,6 +36,13 @@ public enum ErrorCode {
     ORDER_EMPTY(40925, "订单商品不能为空"),
     ORDER_PRODUCT_OFF_SHELF(40926, "商品已下架"),
     ORDER_NOT_FOUND(40927, "订单不存在"),
+    // ===== 收货地址域（迭代 4 · 挑战需求 C，契约：40951~40954）=====
+    ADDRESS_NOT_FOUND(40951, "地址不存在"),
+    ADDRESS_LIMIT(40952, "地址数量已达上限（最多 10 个）"),
+    ADDRESS_ACCESS_DENIED(40953, "地址不属于当前客户"),
+    ADDRESS_REQUIRED(40954, "您还没有收货地址，请先新增地址"),
+    // ===== 物流域（迭代 4 · 挑战需求 C，契约：40971~40972）=====
+    LOGISTICS_NOT_SHIPPED(40971, "订单未发货，无物流信息"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;

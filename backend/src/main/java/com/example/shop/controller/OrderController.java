@@ -88,13 +88,13 @@ public class OrderController {
         return ApiResponse.ok(orderService.ship(orderNo, request));
     }
 
-    /** 物流轨迹（C2-2）：买家查自己的订单，卖家可查全部；轨迹由模拟顺丰服务按发货时间推算。 */
-    @GetMapping("/{orderNo}/tracking")
-    public ApiResponse<OrderDtos.TrackingView> tracking(
+    /** 物流信息（C2-2 / 契约 C.2-04）：买家查自己的订单，卖家可查全部；未发货返回 40971。 */
+    @GetMapping("/{orderNo}/logistics")
+    public ApiResponse<OrderDtos.LogisticsView> logistics(
             @PathVariable String orderNo,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         Actor actor = resolve(authorization);
-        return ApiResponse.ok(orderService.tracking(orderNo, actor.id(), actor.seller()));
+        return ApiResponse.ok(orderService.logistics(orderNo, actor.id(), actor.seller()));
     }
 
     @PostMapping("/{orderNo}/complete")

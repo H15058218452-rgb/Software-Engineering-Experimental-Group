@@ -113,19 +113,17 @@ CREATE TABLE IF NOT EXISTS favorite (
     KEY idx_favorite_buyer (buyer_id, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收藏表';
 
--- 买家收货地址簿（挑战需求 C2-1）：可维护多条，唯一默认地址由服务层保证
+-- 买家收货地址簿（挑战需求 C2-1）：字段与《迭代 4 契约》一致
 CREATE TABLE IF NOT EXISTS address (
-    id             BIGINT       NOT NULL AUTO_INCREMENT,
-    buyer_id       BIGINT       NOT NULL COMMENT '所属买家ID',
-    receiver_name  VARCHAR(32)  NOT NULL COMMENT '收货人',
-    receiver_phone VARCHAR(20)  NOT NULL COMMENT '收货人手机号',
-    province       VARCHAR(32)  NOT NULL COMMENT '省',
-    city           VARCHAR(32)  NOT NULL COMMENT '市',
-    district       VARCHAR(32)  NULL     COMMENT '区/县',
-    detail         VARCHAR(200) NOT NULL COMMENT '详细地址',
-    is_default     TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
-    created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    id         BIGINT       NOT NULL AUTO_INCREMENT,
+    buyer_id   BIGINT       NOT NULL COMMENT '所属买家ID',
+    receiver   VARCHAR(20)  NOT NULL COMMENT '收货人',
+    phone      VARCHAR(11)  NOT NULL COMMENT '收货人手机号',
+    region     VARCHAR(50)  NOT NULL COMMENT '所在地区',
+    detail     VARCHAR(200) NOT NULL COMMENT '详细地址',
+    is_default TINYINT      NOT NULL DEFAULT 0 COMMENT '1默认地址',
+    created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_address_buyer (buyer_id, is_default, updated_at)
+    KEY idx_address_buyer (buyer_id, is_default, created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '买家收货地址簿';
