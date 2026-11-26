@@ -17,6 +17,8 @@
         <router-link to="/seller/customers">客户管理</router-link>
         <!-- 👇 挑战需求 B：订单按客户查看（从客户管理进入），历史为旧意向只读留档 -->
         <router-link to="/seller/orders">客户订单</router-link>
+        <!-- 👇 挑战需求 C：售后服务升级，商家在此集中处理全部售后单 -->
+        <router-link to="/seller/after-sales">售后管理</router-link>
         <router-link to="/seller/history">历史管理</router-link>
         <router-link to="/seller/password">修改密码</router-link>
       </aside>
