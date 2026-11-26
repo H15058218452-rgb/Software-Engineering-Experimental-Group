@@ -36,6 +36,14 @@ public enum ErrorCode {
     ORDER_EMPTY(40925, "订单商品不能为空"),
     ORDER_PRODUCT_OFF_SHELF(40926, "商品已下架"),
     ORDER_NOT_FOUND(40927, "订单不存在"),
+    // ===== 收货地址域（迭代 4 · 挑战需求 C，契约：40951~40954）=====
+    ADDRESS_NOT_FOUND(40951, "地址不存在"),
+    ADDRESS_LIMIT(40952, "地址数量已达上限（最多 10 个）"),
+    ADDRESS_ACCESS_DENIED(40953, "地址不属于当前客户"),
+    ADDRESS_REQUIRED(40954, "您还没有收货地址，请先新增地址"),
+    // ===== 物流域（迭代 4 · 挑战需求 C，契约：40971~40972）=====
+    LOGISTICS_NOT_SHIPPED(40971, "订单未发货，无物流信息"),
+    LOGISTICS_NO_EMPTY(40972, "物流单号或快递公司为空"),
     // ===== 支付域（迭代 4 · 挑战需求 C，契约第八章：40941~40945）=====
     PAY_STATUS_DENIED(40941, "订单不是待支付状态，无法支付"),
     PAY_CHANNEL_INVALID(40942, "不支持的支付渠道"),

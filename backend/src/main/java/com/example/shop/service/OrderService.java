@@ -13,6 +13,9 @@ import com.example.shop.enums.OrderAction;
 import com.example.shop.enums.OrderStatus;
 import com.example.shop.enums.ProductStatus;
 import com.example.shop.mapper.OrderItemMapper;
+import com.example.shop.entity.Logistics;
+import com.example.shop.mapper.LogisticsMapper;
+import com.example.shop.mapper.OrderItemMapper;
 import com.example.shop.mapper.OrderMapper;
 import com.example.shop.mapper.ProductMapper;
 import org.springframework.stereotype.Service;
@@ -56,13 +59,16 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final ProductMapper productMapper;
+    private final LogisticsMapper logisticsMapper;
     private final PaymentService paymentService;
 
-    public OrderService(OrderMapper orderMapper, OrderItemMapper orderItemMapper, ProductMapper productMapper,
+    public OrderService(OrderMapper orderMapper, OrderItemMapper orderItemMapper,
+                        ProductMapper productMapper, LogisticsMapper logisticsMapper,
                         PaymentService paymentService) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.productMapper = productMapper;
+        this.logisticsMapper = logisticsMapper;
         this.paymentService = paymentService;
     }
 
@@ -219,6 +225,179 @@ public class OrderService {
         }
         return new OrderDtos.StatusView(orderNo, OrderStatus.CANCELLED.getCode(),
                 OrderStatus.CANCELLED.getText());
+    }
+
+    // ============ 发货与物流（挑战需求 C2-2） ============
+
+    private static final String LOGISTICS_SHIPPED = "SHIPPED";
+    private static final String LOGISTICS_IN_TRANSIT = "IN_TRANSIT";
+    private static final String LOGISTICS_SIGNED = "SIGNED";
+
+    /**
+     * 卖家发货（C.2-03）：仅「备货完成 30」可发货，物流单号与快递公司均必填（空报 40972）。
+     * 状态推进与物流记录在同一事务内完成，避免出现已发货却没有物流信息的中间态。
+     */
+    @Transactional
+    public OrderDtos.ShipView ship(String orderNo, OrderDtos.ShipRequest req) {
+        String logisticsNo = requireLogisticsNo(req);
+        String carrier = requireCarrier(req);
+
+        Order order = lockOrder(orderNo);
+        int current = order.getStatus();
+        if (OrderStatus.isFinal(current)) {
+            throw new BizException(ErrorCode.ORDER_FINALIZED);
+        }
+        int expected = OrderStatus.READY.getCode();
+        int to = OrderStatus.SHIPPED.getCode();
+        if (current != expected) {
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "订单当前状态为「" + OrderStatus.textOf(current) + "」，不能执行「ship」",
+                    new OrderDtos.StatusConflict(current, expected));
+        }
+        if (orderMapper.casStatus(orderNo, expected, to) != 1) {
+            Order latest = orderMapper.selectByOrderNo(orderNo);
+            int nowStatus = latest == null ? current : latest.getStatus();
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "订单状态已变更，请刷新后重试",
+                    new OrderDtos.StatusConflict(nowStatus, expected));
+        }
+
+        Logistics lg = new Logistics();
+        lg.setOrderNo(orderNo);
+        lg.setLogisticsNo(logisticsNo);
+        lg.setCarrier(carrier);
+        lg.setStatus(LOGISTICS_SHIPPED);
+        lg.setCreatedAt(LocalDateTime.now());
+        lg.setUpdatedAt(LocalDateTime.now());
+        logisticsMapper.insert(lg);
+        return new OrderDtos.ShipView(orderNo, logisticsNo, carrier,
+                LOGISTICS_SHIPPED, logisticsStatusText(LOGISTICS_SHIPPED));
+    }
+
+    /** 修改物流单号（C.2-03）：仅「已发货 40」且客户未签收时可改。 */
+    @Transactional
+    public OrderDtos.ShipView updateLogistics(String orderNo, OrderDtos.ShipRequest req) {
+        String logisticsNo = requireLogisticsNo(req);
+        String carrier = requireCarrier(req);
+
+        Order order = orderMapper.selectByOrderNo(orderNo);
+        if (order == null) {
+            throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        int expected = OrderStatus.SHIPPED.getCode();
+        int current = order.getStatus();
+        if (OrderStatus.isFinal(current)) {
+            throw new BizException(ErrorCode.ORDER_FINALIZED);
+        }
+        if (current != expected) {
+            throw new BizException(ErrorCode.ORDER_STATUS_DENIED,
+                    "订单当前状态为「" + OrderStatus.textOf(current) + "」，只有已发货可修改物流",
+                    new OrderDtos.StatusConflict(current, expected));
+        }
+        Logistics lg = logisticsMapper.selectByOrderNo(orderNo);
+        if (lg == null) {
+            throw new BizException(ErrorCode.LOGISTICS_NOT_SHIPPED);
+        }
+        lg.setLogisticsNo(logisticsNo);
+        lg.setCarrier(carrier);
+        lg.setUpdatedAt(LocalDateTime.now());
+        logisticsMapper.updateById(lg);
+        return new OrderDtos.ShipView(orderNo, logisticsNo, carrier,
+                lg.getStatus(), logisticsStatusText(lg.getStatus()));
+    }
+
+    /**
+     * 物流信息查询（契约 C.2-04）：订单 40 及之后可查，未发货返回 40971；买家只能查自己的订单。
+     * 轨迹由「模拟顺丰服务」按发货时间推算，不依赖外部网络，便于离线演示与验收。
+     */
+    public OrderDtos.LogisticsView logistics(String orderNo, Long actorId, boolean seller) {
+        Order order = orderMapper.selectByOrderNo(orderNo);
+        if (order == null) {
+            throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!seller && !Objects.equals(order.getCustomerId(), actorId)) {
+            throw new BizException(ErrorCode.ORDER_ACCESS_DENIED);
+        }
+        Logistics lg = logisticsMapper.selectByOrderNo(orderNo);
+        if (lg == null) {
+            throw new BizException(ErrorCode.LOGISTICS_NOT_SHIPPED);
+        }
+
+        LocalDateTime shippedAt = lg.getCreatedAt();
+        LocalDateTime now = LocalDateTime.now();
+        List<OrderDtos.LogisticsTrace> traces = new ArrayList<>();
+        if (shippedAt != null) {
+            addTrace(traces, now, shippedAt, "快件已由顺丰速运揽收");
+            addTrace(traces, now, shippedAt.plusHours(6), "快件已到达杭州转运中心");
+            addTrace(traces, now, shippedAt.plusHours(18), "快件已从杭州转运中心发出");
+            addTrace(traces, now, shippedAt.plusHours(30), "快件正在派送，请保持电话畅通");
+            if (order.getStatus() != null && order.getStatus() == OrderStatus.COMPLETED.getCode()) {
+                addTrace(traces, now, shippedAt.plusHours(36), "快件已签收，感谢使用顺丰速运");
+            }
+            // 最新节点在前
+            traces.sort((a, b) -> b.time().compareTo(a.time()));
+        }
+
+        String status = logisticsStatus(order, shippedAt, now);
+        return new OrderDtos.LogisticsView(
+                orderNo,
+                lg.getLogisticsNo(),
+                lg.getCarrier(),
+                status,
+                logisticsStatusText(status),
+                traces);
+    }
+
+    /** 契约枚举：SHIPPED 已发货（12 小时内）/ IN_TRANSIT 运输中 / SIGNED 已签收（订单完成）。 */
+    private String logisticsStatus(Order order, LocalDateTime shippedAt, LocalDateTime now) {
+        if (order.getStatus() != null && order.getStatus() == OrderStatus.COMPLETED.getCode()) {
+            return LOGISTICS_SIGNED;
+        }
+        if (shippedAt == null) {
+            return LOGISTICS_SHIPPED;
+        }
+        return shippedAt.plusHours(12).isAfter(now) ? LOGISTICS_SHIPPED : LOGISTICS_IN_TRANSIT;
+    }
+
+    private String logisticsStatusText(String status) {
+        return switch (status) {
+            case LOGISTICS_SIGNED -> "已签收";
+            case LOGISTICS_IN_TRANSIT -> "运输中";
+            default -> "已发货";
+        };
+    }
+
+    /** 只展示已经发生的节点，避免出现“未来时间”的轨迹。 */
+    private void addTrace(List<OrderDtos.LogisticsTrace> traces, LocalDateTime now,
+                          LocalDateTime nodeTime, String desc) {
+        if (!nodeTime.isAfter(now)) {
+            traces.add(new OrderDtos.LogisticsTrace(TimeUtil.format(nodeTime), desc));
+        }
+    }
+
+    /** 物流单号必填（40972），并限制 6~32 位字母/数字/短横线。 */
+    private String requireLogisticsNo(OrderDtos.ShipRequest req) {
+        String value = req == null || req.logisticsNo() == null ? "" : req.logisticsNo().trim();
+        if (value.isEmpty()) {
+            throw new BizException(ErrorCode.LOGISTICS_NO_EMPTY);
+        }
+        if (value.length() > 32 || !value.matches("^[A-Za-z0-9-]{6,32}$")) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(),
+                    "物流单号格式不正确（6~32 位字母、数字或短横线）");
+        }
+        return value;
+    }
+
+    /** 快递公司必填（40972），如「顺丰速运」。 */
+    private String requireCarrier(OrderDtos.ShipRequest req) {
+        String value = req == null || req.carrier() == null ? "" : req.carrier().trim();
+        if (value.isEmpty()) {
+            throw new BizException(ErrorCode.LOGISTICS_NO_EMPTY);
+        }
+        if (value.length() > 32) {
+            throw new BizException(ErrorCode.PARAM_ERROR.getCode(), "快递公司名称不能超过 32 字");
+        }
+        return value;
     }
 
     /** 客户确认收货：40 已发货 → 50 交易完成，仅买家本人可操作，系统不做超时自动确认。 */

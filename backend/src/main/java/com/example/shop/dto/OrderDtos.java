@@ -40,4 +40,26 @@ public interface OrderDtos {
     /** 40921 的 data 载荷：当前状态与本次动作要求的前置状态。 */
     record StatusConflict(Integer currentStatus, Integer expectedStatus) {
     }
+
+    /** 发货入参（C2-2）：物流单号与快递公司均为必填，缺任一返回 40972。 */
+    record ShipRequest(String logisticsNo, String carrier) {
+    }
+
+    /** 发货/改单号返回：单号与承运商一并回给前端，便于即时展示。 */
+    record ShipView(String orderNo, String logisticsNo, String carrier,
+                    String status, String statusText) {
+    }
+
+    /** 物流轨迹节点（契约字段名：time / desc）。 */
+    record LogisticsTrace(String time, String desc) {
+    }
+
+    /**
+     * 物流信息（C2-2），字段与《接口契约-挑战需求C》一致：
+     * { orderNo, logisticsNo, carrier, status, statusText, traces: [{time, desc}] }
+     * status 枚举：SHIPPED 已发货 / IN_TRANSIT 运输中 / SIGNED 已签收。
+     */
+    record LogisticsView(String orderNo, String logisticsNo, String carrier,
+                         String status, String statusText, List<LogisticsTrace> traces) {
+    }
 }
