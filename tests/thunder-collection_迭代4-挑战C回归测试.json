@@ -1,0 +1,394 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "迭代4-挑战C回归测试",
+  "collectionId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+  "dateExported": "2026-11-26T02:00:00.000Z",
+  "version": "1.4",
+  "folders": [],
+  "requests": [
+    {
+      "_id": "11111111-1111-4111-8111-111111111101",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "01 买家登录（拿 buyerToken）",
+      "url": "{{baseUrl}}/api/buyer/login",
+      "method": "POST",
+      "sortNum": 10000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"username\":\"buyer01\",\"password\":\"pass1234\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111102",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "02 卖家登录（拿 sellerToken）",
+      "url": "{{baseUrl}}/api/seller/login",
+      "method": "POST",
+      "sortNum": 20000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"username\":\"seller01\",\"password\":\"pass1234\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111103",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "03 商品列表",
+      "url": "{{baseUrl}}/api/products",
+      "method": "GET",
+      "sortNum": 30000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111104",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "04 创建订单（返回 15 待支付，记下 orderNo）",
+      "url": "{{baseUrl}}/api/order",
+      "method": "POST",
+      "sortNum": 40000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"items\":[{\"productId\":\"3\",\"quantity\":1}]}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });", "tc.test(\"状态为 15 待支付\", function() { tc.expect(tc.response.json.data.status).to.equal(15); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111105",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "05 发起支付（返回 PENDING 与 paymentNo）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/pay",
+      "method": "POST",
+      "sortNum": 50000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"channel\":\"ALIPAY\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });", "tc.test(\"支付单为 PENDING\", function() { tc.expect(tc.response.json.data.status).to.equal(\"PENDING\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111106",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "06 重复发起支付（应复用同一 paymentNo）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/pay",
+      "method": "POST",
+      "sortNum": 60000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"channel\":\"ALIPAY\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111107",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "07 查询支付结果（未支付）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/pay",
+      "method": "GET",
+      "sortNum": 70000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111108",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "08 支付回调成功（15 -> 18）",
+      "url": "{{baseUrl}}/api/pay/callback",
+      "method": "POST",
+      "sortNum": 80000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"paymentNo\":\"{{paymentNo}}\",\"channel\":\"ALIPAY\",\"amount\":\"{{payAmount}}\",\"tradeNo\":\"MOCK-20261126-0001\",\"paidAt\":\"2026-11-26 10:00:00\",\"success\":true}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111109",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "09 回调重复投递（幂等，订单仍 18）",
+      "url": "{{baseUrl}}/api/pay/callback",
+      "method": "POST",
+      "sortNum": 90000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"paymentNo\":\"{{paymentNo}}\",\"channel\":\"ALIPAY\",\"amount\":\"{{payAmount}}\",\"tradeNo\":\"MOCK-20261126-0001\",\"paidAt\":\"2026-11-26 10:00:00\",\"success\":true}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111110",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "10 卖家确认（18 -> 20）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/confirm",
+      "method": "POST",
+      "sortNum": 100000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"状态 20\", function() { tc.expect(tc.response.json.data.status).to.equal(20); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111111",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "11 卖家备货（20 -> 30）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/ready",
+      "method": "POST",
+      "sortNum": 110000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"状态 30\", function() { tc.expect(tc.response.json.data.status).to.equal(30); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111112",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "12 卖家发货（30 -> 40）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/ship",
+      "method": "POST",
+      "sortNum": 120000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"logisticsNo\":\"SF1234567890\",\"carrier\":\"顺丰速运\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"状态 40\", function() { tc.expect(tc.response.json.data.status).to.equal(40); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111113",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "13 客户确认收货（40 -> 50）",
+      "url": "{{baseUrl}}/api/order/{{orderNo}}/receive",
+      "method": "POST",
+      "sortNum": 130000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"状态 50\", function() { tc.expect(tc.response.json.data.status).to.equal(50); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111114",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "14 售后申请（已发货后开放，返回 PENDING）",
+      "url": "{{baseUrl}}/api/after-sale",
+      "method": "POST",
+      "sortNum": 140000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"orderNo\":\"{{orderNo}}\",\"productId\":\"3\",\"quantity\":1,\"title\":\"商品有划痕\",\"description\":\"开箱即发现外壳有明显划痕\",\"images\":[]}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111115",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "15 我的售后列表",
+      "url": "{{baseUrl}}/api/after-sale/my",
+      "method": "GET",
+      "sortNum": 150000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"code 0\", function() { tc.expect(tc.response.json.code).to.equal(0); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111116",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "16 售后详情（买家）",
+      "url": "{{baseUrl}}/api/after-sale/{{afterSaleNo}}",
+      "method": "GET",
+      "sortNum": 160000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111117",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "17 卖家售后列表（可按状态过滤）",
+      "url": "{{baseUrl}}/api/seller/after-sale",
+      "method": "GET",
+      "sortNum": 170000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111118",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "18 卖家同意退货（PENDING -> WAIT_RETURN）",
+      "url": "{{baseUrl}}/api/seller/after-sale/{{afterSaleNo}}/agree-return",
+      "method": "POST",
+      "sortNum": 180000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"WAIT_RETURN\", function() { tc.expect(tc.response.json.data.status).to.equal(\"WAIT_RETURN\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111119",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "19 卖家确认收到退货并退款（-> REFUNDED）",
+      "url": "{{baseUrl}}/api/seller/after-sale/{{afterSaleNo}}/receive",
+      "method": "POST",
+      "sortNum": 190000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"refundNote\":\"已收到退货，外包装完好\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"REFUNDED\", function() { tc.expect(tc.response.json.data.status).to.equal(\"REFUNDED\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111120",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "20 卖家仅退款（新售后单，-> REFUNDED）",
+      "url": "{{baseUrl}}/api/seller/after-sale/{{afterSaleNo2}}/refund-only",
+      "method": "POST",
+      "sortNum": 200000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"REFUNDED\", function() { tc.expect(tc.response.json.data.status).to.equal(\"REFUNDED\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111121",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "21 卖家拒绝售后（新售后单，-> REJECTED）",
+      "url": "{{baseUrl}}/api/seller/after-sale/{{afterSaleNo3}}/reject",
+      "method": "POST",
+      "sortNum": 210000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{sellerToken}}" }
+      ],
+      "params": [],
+      "body": { "type": "json", "raw": "{\"reason\":\"凭证不足，无法判定为质量问题\"}", "form": [] },
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"REJECTED\", function() { tc.expect(tc.response.json.data.status).to.equal(\"REJECTED\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111122",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "22 客户撤销售后（新售后单，-> CANCELLED）",
+      "url": "{{baseUrl}}/api/after-sale/{{afterSaleNo4}}/cancel",
+      "method": "POST",
+      "sortNum": 220000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"CANCELLED\", function() { tc.expect(tc.response.json.data.status).to.equal(\"CANCELLED\"); });"] } ] }
+    },
+    {
+      "_id": "11111111-1111-4111-8111-111111111123",
+      "colId": "c4a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+      "containerId": "",
+      "name": "23 待支付订单取消（-> 90 已取消）",
+      "url": "{{baseUrl}}/api/order/{{orderNo2}}/cancel",
+      "method": "POST",
+      "sortNum": 230000,
+      "created": "2026-11-26T02:00:00.000Z",
+      "modified": "2026-11-26T02:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{buyerToken}}" }
+      ],
+      "params": [],
+      "postReq": { "inlineScripts": [ { "script": ["tc.test(\"HTTP 200\", function() { tc.expect(tc.response.status).to.equal(200); });", "tc.test(\"状态 90\", function() { tc.expect(tc.response.json.data.status).to.equal(90); });"] } ] }
+    }
+  ]
+}
