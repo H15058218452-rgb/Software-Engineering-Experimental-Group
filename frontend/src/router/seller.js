@@ -24,6 +24,8 @@ const sellerRoutes = [
 
       // 👇 挑战需求 B：订单（B.1）—— 按客户查看，从客户管理进入，无全局订单列表
       { path: 'orders',      name: 'SellerOrders',       component: () => import('@/views/seller/OrderList.vue'),     meta: { title: '客户订单' } },
+      // 👇 挑战需求 C：售后管理（C.3）—— 全部售后单，按状态筛选，可同意退货 / 仅退款 / 拒绝
+      { path: 'after-sales', name: 'SellerAfterSales',   component: () => import('@/views/seller/AfterSaleList.vue'), meta: { title: '售后管理' } },
       // 👇 挑战需求 B：历史管理独立页面（不再和商品管理放在一起）
       { path: 'history',     name: 'SellerHistory',      component: () => import('@/views/seller/HistoryList.vue'),   meta: { title: '历史管理' } }
     ]
