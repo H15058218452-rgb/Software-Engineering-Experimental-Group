@@ -36,6 +36,21 @@ public enum ErrorCode {
     ORDER_EMPTY(40925, "订单商品不能为空"),
     ORDER_PRODUCT_OFF_SHELF(40926, "商品已下架"),
     ORDER_NOT_FOUND(40927, "订单不存在"),
+    // ===== 支付域（迭代 4 · 挑战需求 C，契约第八章：40941~40945）=====
+    PAY_STATUS_DENIED(40941, "订单不是待支付状态，无法支付"),
+    PAY_CHANNEL_INVALID(40942, "不支持的支付渠道"),
+    PAY_DUPLICATE(40943, "支付单已存在或重复支付"),
+    PAY_AMOUNT_MISMATCH(40944, "支付金额与订单金额不一致"),
+    PAY_NOT_FOUND(40945, "支付记录不存在"),
+    // ===== 售后域（迭代 4 · 挑战需求 C，契约第八章：40961~40968）=====
+    AFTER_SALE_NOT_FOUND(40961, "售后单不存在"),
+    AFTER_SALE_NOT_ALLOWED(40962, "当前订单状态不可发起售后"),
+    AFTER_SALE_QUANTITY_DENIED(40963, "售后数量超过购买数量"),
+    AFTER_SALE_EXISTS(40964, "同一商品已有进行中的售后单"),
+    AFTER_SALE_LIMIT(40965, "同一商品售后次数已达上限"),
+    AFTER_SALE_STATUS_DENIED(40966, "售后单状态不允许该操作"),
+    AFTER_SALE_ACCESS_DENIED(40967, "售后单不属于当前客户"),
+    AFTER_SALE_IMAGE_LIMIT(40968, "图片数量或大小超限"),
     SYSTEM_ERROR(50000, "系统错误");
 
     private final int code;

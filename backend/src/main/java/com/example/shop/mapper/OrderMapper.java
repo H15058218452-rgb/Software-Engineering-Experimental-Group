@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.util.List;
+
 /**
  * 订单主表访问。
  * 状态变更一律走 CAS（UPDATE ... WHERE status = 期望值），避免并发下重复推进。
@@ -32,4 +34,15 @@ public interface OrderMapper extends BaseMapper<Order> {
     int casStatus(@Param("orderNo") String orderNo,
                   @Param("from") int from,
                   @Param("to") int to);
+
+    /** 支付成功：15 待支付 → 18 已支付，同时写支付时间。 */
+    @Update("UPDATE `order` SET status = 18, paid_at = NOW(3), updated_at = NOW(3) "
+            + "WHERE order_no = #{orderNo} AND status = 15")
+    int markPaid(@Param("orderNo") String orderNo);
+
+    /** 支付超时的待支付订单，供定时任务扫描自动取消。 */
+    @Select("SELECT order_no FROM `order` WHERE status = 15 "
+            + "AND pay_deadline IS NOT NULL AND pay_deadline < NOW(3) "
+            + "ORDER BY id LIMIT #{limit}")
+    List<String> selectExpiredWaitPay(@Param("limit") int limit);
 }
