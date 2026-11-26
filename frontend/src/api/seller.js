@@ -124,11 +124,12 @@ export async function getCustomerHistory(customerId) {
   return success(result)
 }
 
-// 12. 订单管理（挑战需求 B.1）
-// 订单状态码（后端 enums/OrderStatus）：10 客户下单 / 20 商家确认 / 30 备货完成 / 40 开始发货 / 50 交易完成 / 90 已取消
+// 12. 订单管理（挑战需求 C：支付 / 配送升级后的 8 个状态）
+// 状态码（后端 enums/OrderStatus）：
+//   10 客户下单（内部态，对外不暴露） / 15 待支付 / 18 已支付
+//   20 商家确认 / 30 备货完成 / 40 开始发货 / 50 交易完成 / 90 已取消
 //
-// 后端只有 9 个订单端点，没有「卖家全局订单列表」：
-//   B.1-4 已裁定 —— 商家不设全局订单列表、不按状态筛选，只能从客户进入，看该客户的订单记录。
+// 后端没有「卖家全局订单列表」（B.1-4 裁定）：商家只能从客户进入，看该客户的订单记录。
 //   因此这里按客户查：GET /seller/customer/{customerId}/order（SellerOrderController）
 export async function getCustomerOrderList(customerId, params = {}) {
   const result = await request.get(`/seller/customer/${encodeURIComponent(customerId)}/order`, {
@@ -146,25 +147,55 @@ export async function getCustomerOrderList(customerId, params = {}) {
   })
 }
 
-// 状态推进（仅商家）：10→20 confirm、20→30 ready、30→40 ship、40→50 complete
-// 跳态 / 回退 / 重复提交 → 40921；50、90 终态 → 40923；非卖家 → 40301/40101
+// 状态推进（仅商家，C.1-06）：confirm 18→20、ready 20→30、ship 30→40
+// 「交易完成」不在商家侧：40→50 只能由客户点「确认收货」（C.1-07），商家无 complete 权限
+// 跳态 / 回退 / 重复提交 → 40921；50、90 终态 → 40923；非卖家 → 40922
 const ORDER_ACTION_PATHS = {
   confirm: 'confirm',
   ready: 'ready',
-  ship: 'ship',
-  complete: 'complete'
+  ship: 'ship'
 }
 
-export async function advanceOrder(orderNo, action) {
+export async function advanceOrder(orderNo, action, data = {}) {
   const path = ORDER_ACTION_PATHS[action]
   if (!path) throw { code: 40001, message: `不支持的订单操作：${action}` }
-  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/${path}`)
+
+  // 发货必须带物流单号与快递公司（C.2-03），缺了直接在前端拦掉，不浪费一次请求
+  let payload
+  if (action === 'ship') {
+    const logisticsNo = String(data.logisticsNo ?? '').trim()
+    const carrier = String(data.carrier ?? '').trim()
+    if (!logisticsNo || !carrier) throw { code: 40972, message: '物流单号与快递公司为必填项' }
+    payload = { logisticsNo, carrier }
+  }
+
+  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/${path}`, payload)
   return success(result, '操作成功')
 }
 
-// 商家取消订单：10 / 20 / 30 / 40 可取消（50 之后隐藏按钮）；取消后同事务回补库存
-export async function cancelOrder(orderNo) {
-  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/cancel`)
+// 查询物流（C.2-04）：订单 40 及之后可查；未发货报 40971
+export async function getOrderLogistics(orderNo) {
+  const result = await request.get(`/order/${encodeURIComponent(orderNo)}/logistics`)
+  return success(result)
+}
+
+// 修改物流单号（C.2-03）：仅 40 开始发货、且客户未签收时可改
+export async function updateOrderLogistics(orderNo, data = {}) {
+  const logisticsNo = String(data.logisticsNo ?? '').trim()
+  const carrier = String(data.carrier ?? '').trim()
+  if (!logisticsNo || !carrier) throw { code: 40972, message: '物流单号与快递公司为必填项' }
+  const result = await request.put(`/order/${encodeURIComponent(orderNo)}/logistics`, { logisticsNo, carrier })
+  return success(result, '物流信息已更新')
+}
+
+// 商家取消（C.1-05）：15 / 18 / 20 / 30 / 40 可取消，50 之后无权限
+//   15 取消不退款、回补库存；18/20/30 原路退款并回补库存；40 原路退款但库存不回补（货已发出）
+//   退款由后端在同一事务里完成，前端只负责提示后果
+export async function cancelOrder(orderNo, reason = '') {
+  const payload = {}
+  const text = String(reason ?? '').trim()
+  if (text) payload.reason = text.slice(0, 100)
+  const result = await request.post(`/order/${encodeURIComponent(orderNo)}/cancel`, payload)
   return success(result, '订单已取消')
 }
 
@@ -209,3 +240,69 @@ export async function updateGoods(productId, data) {
 }
 
 export const publishGoods = publishProduct
+
+// 15. 售后管理（挑战需求 C.3）
+// 售后单状态：PENDING 待处理 / WAIT_RETURN 待收货 / REFUNDED 已退款 / REJECTED 已拒绝 / CANCELLED 已撤销
+// 单卖家模式：商家可看全部售后单，不存在按店铺隔离
+export async function getAfterSaleList(params = {}) {
+  const query = {
+    page: Number(params.page) || 1,
+    size: Number(params.size) || 10
+  }
+  if (params.status) query.status = String(params.status)
+
+  const result = await request.get('/seller/after-sale', { params: query })
+  const list = Array.isArray(result) ? result : (result?.list ?? result?.records ?? [])
+  return success({
+    list,
+    total: Number(result?.total ?? list.length),
+    page: Number(result?.page ?? query.page),
+    size: Number(result?.size ?? query.size)
+  })
+}
+
+// 售后单详情：买家只能看自己的，卖家可看全部（C.3-03）
+export async function getAfterSaleDetail(afterSaleNo) {
+  const result = await request.get(`/after-sale/${encodeURIComponent(afterSaleNo)}`)
+  return success(result)
+}
+
+// 商家处理售后（C.3-04 ~ C.3-06）
+//   agree-return 同意退货：PENDING → WAIT_RETURN，此时不退款、不回补库存
+//   receive      确认收到退货并退款：WAIT_RETURN → REFUNDED，回补库存 + 原路退款
+//   refund-only  仅退款：PENDING → REFUNDED，不要求寄回、库存不回补
+//   reject       拒绝售后：PENDING → REJECTED，不退款、不回补库存
+const AFTER_SALE_ACTION_PATHS = {
+  'agree-return': 'agree-return',
+  receive: 'receive',
+  'refund-only': 'refund-only',
+  reject: 'reject'
+}
+
+const AFTER_SALE_ACTION_TEXT = {
+  'agree-return': '已同意退货',
+  receive: '已确认收货并退款',
+  'refund-only': '已退款',
+  reject: '已拒绝售后'
+}
+
+export async function operateAfterSale(afterSaleNo, action, data = {}) {
+  const path = AFTER_SALE_ACTION_PATHS[action]
+  if (!path) throw { code: 40001, message: `不支持的售后操作：${action}` }
+
+  // receive 可带退款备注；reject 可带拒绝理由（系统不强制、也不展示给客户）
+  let payload
+  if (action === 'receive') {
+    const note = String(data.refundNote ?? '').trim()
+    payload = note ? { refundNote: note.slice(0, 100) } : {}
+  } else if (action === 'reject') {
+    const reason = String(data.reason ?? '').trim()
+    payload = reason ? { reason: reason.slice(0, 100) } : {}
+  }
+
+  const result = await request.post(
+    `/seller/after-sale/${encodeURIComponent(afterSaleNo)}/${path}`,
+    payload
+  )
+  return success(result, AFTER_SALE_ACTION_TEXT[action] || '操作成功')
+}
