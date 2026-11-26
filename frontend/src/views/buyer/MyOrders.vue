@@ -81,18 +81,41 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="操作" width="110" align="center">
+            <el-table-column label="操作" width="150" align="center">
               <template #default="{ row }">
-                <!-- 客户可在 10 / 20 / 30 取消；「开始发货」及以后隐藏取消按钮 -->
-                <el-button
-                  v-if="isCustomerCancellable(row.status)"
-                  link
-                  type="danger"
-                  @click="handleCancel(row)"
-                >
-                  取消订单
-                </el-button>
-                <span v-else class="op-none">-</span>
+                <div class="op-cell">
+                  <!-- 待支付：去支付（15） -->
+                  <el-button
+                    v-if="isAwaitingPayment(row.status)"
+                    link
+                    type="danger"
+                    @click="goPay(row)"
+                  >
+                    去支付
+                  </el-button>
+
+                  <!-- 确认收货：只有「开始发货」40 展示（C.1-07） -->
+                  <el-button
+                    v-if="canReceiveOrder(row.status)"
+                    link
+                    type="danger"
+                    @click="handleReceive(row)"
+                  >
+                    确认收货
+                  </el-button>
+
+                  <!-- 取消：15 / 18 / 20 / 30 显示；40 及之后隐藏（C.1-04） -->
+                  <el-button
+                    v-if="isCustomerCancellable(row.status)"
+                    link
+                    type="danger"
+                    @click="handleCancel(row)"
+                  >
+                    取消订单
+                  </el-button>
+
+                  <el-button link type="primary" @click="goDetail(row)">订单详情</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -125,11 +148,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMyOrderList, cancelOrder } from '@/api/buyer'
+import { getMyOrderList, cancelOrder, receiveOrder } from '@/api/buyer'
 import { formatMoney, formatTime } from '@/utils/format'
 import {
   ORDER_STATUS_TEXT,
   isCustomerCancellable,
+  isAwaitingPayment,
+  canReceiveOrder,
+  isPaidStatus,
   orderStatusTagType,
   finalResultText
 } from '@/constants/orderStatus'
@@ -170,21 +196,35 @@ async function loadOrders() {
   }
 }
 
-// 取消订单：即时生效，无对方确认与审批；前端仅做一次防误触提示
+// 取消订单（C.1-04）：15 / 18 / 20 / 30 可取消；已支付需原路退款，取消原因选填
 async function handleCancel(row) {
+  const paid = isPaidStatus(row.status)
+  const tip = paid
+    ? `该订单已支付，取消后款项将按原支付渠道原路退回，库存同时回补。取消后订单进入终态，不可恢复。`
+    : `该订单尚未支付，取消后立即进入「已取消」终态，占用的库存将被释放，不可恢复。`
+
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `确定取消订单 ${row.orderNo} 吗？取消后订单立即进入「已取消」终态，库存将自动回补，且不可撤销。`,
-      '取消订单',
-      { confirmButtonText: '确定取消', cancelButtonText: '再想想', type: 'warning' }
-    )
+    const res = await ElMessageBox.prompt(tip, `取消订单 ${row.orderNo}`, {
+      confirmButtonText: '确定取消',
+      cancelButtonText: '再想想',
+      inputPlaceholder: '取消原因（选填，最多 100 字）',
+      inputType: 'textarea',
+      inputValidator: v => String(v || '').length <= 100 || '取消原因最多 100 字',
+      type: 'warning'
+    })
+    reason = res.value || ''
   } catch (e) {
     return // 用户放弃
   }
 
   try {
-    await cancelOrder(row.orderNo)
-    ElMessage.success('订单已取消，库存已回补')
+    const res = await cancelOrder(row.orderNo, reason)
+    if (res?.refundAmount) {
+      ElMessage.success(`订单已取消，${formatMoney(res.refundAmount)} 已按原渠道退回`)
+    } else {
+      ElMessage.success('订单已取消，库存已释放')
+    }
     await loadOrders()
   } catch (e) {
     // 40921 时机不符 / 40923 已终态：状态已被变更，提示后刷新列表
@@ -195,6 +235,42 @@ async function handleCancel(row) {
       ElMessage.error(e.message || '取消失败，请重试')
     }
   }
+}
+
+// 确认收货（C.1-07）：40 → 50 交易完成
+async function handleReceive(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认已经收到订单 ${row.orderNo} 的商品吗？确认后订单进入「交易完成」终态，不可撤销。`,
+      '确认收货',
+      { confirmButtonText: '确认收货', cancelButtonText: '还没收到', type: 'warning' }
+    )
+  } catch (e) {
+    return
+  }
+
+  try {
+    await receiveOrder(row.orderNo)
+    ElMessage.success('已确认收货，交易完成')
+    await loadOrders()
+  } catch (e) {
+    if (e.code === 40921 || e.code === 40923) {
+      ElMessage.warning(`${e.message}，已为您刷新订单状态`)
+      await loadOrders()
+    } else {
+      ElMessage.error(e.message || '确认收货失败，请重试')
+    }
+  }
+}
+
+// 去支付（15 待支付 → 支付页）
+function goPay(row) {
+  router.push(`/buyer/pay/${encodeURIComponent(row.orderNo)}`)
+}
+
+// 订单详情：地址快照 / 物流 / 售后入口都在详情页
+function goDetail(row) {
+  router.push(`/buyer/orders/${encodeURIComponent(row.orderNo)}`)
 }
 
 function handlePageChange(page) {
@@ -241,7 +317,10 @@ onMounted(() => {
 
 .goods-summary { color: #333; }
 .amount { color: #e60012; font-weight: 500; }
-.op-none { color: #ccc; }
+
+/* 操作列：按钮纵向排列，避免挤压 */
+.op-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.op-cell :deep(.el-button) { margin-left: 0; height: 22px; }
 
 /* 展开行：订单明细 */
 .detail-wrap { padding: 16px 20px 20px; background: #fafafa; }
